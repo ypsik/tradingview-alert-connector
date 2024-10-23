@@ -27,7 +27,7 @@ import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 
 export class DydxV4Client extends AbstractDexClient {
-	async getIsAccountReady() {
+	public async getIsAccountReady() {
 		const subAccount = await this.getSubAccount();
 		if (!subAccount) return false;
 
@@ -35,7 +35,7 @@ export class DydxV4Client extends AbstractDexClient {
 		return (Number(subAccount.freeCollateral) > 0) as boolean;
 	}
 
-	async getSubAccount() {
+	private async getSubAccount() {
 		try {
 			const client = this.buildIndexerClient();
 			const localWallet = await this.generateLocalWallet();
@@ -51,7 +51,7 @@ export class DydxV4Client extends AbstractDexClient {
 		}
 	}
 
-	async buildOrderParams(alertMessage: AlertObject) {
+	private async buildOrderParams(alertMessage: AlertObject) {
 		const orderSide =
 			alertMessage.order == 'buy' ? OrderSide.BUY : OrderSide.SELL;
 
@@ -85,7 +85,7 @@ export class DydxV4Client extends AbstractDexClient {
 		return orderParams;
 	}
 
-	async placeOrder(
+	public async placeOrder(
 		alertMessage: AlertObject,
 		openedPositions: MarketData[],
 		mutex: Mutex
@@ -113,41 +113,53 @@ export class DydxV4Client extends AbstractDexClient {
 				: orderParams.price * ((100 - slippagePercentage) / 100);
 		let size = orderParams.size;
 
-		if (side === OrderSide.SELL && direction === 'long' || side === OrderSide.BUY && direction === 'short') {
+		if (
+			(side === OrderSide.SELL && direction === 'long') ||
+			(side === OrderSide.BUY && direction === 'short')
+		) {
 			// dydx group all positions in one position per symbol
 			const position = openedPositions.find((el) => el.market === market);
 
 			if (!position) {
-				console.log("order is ignored because position not exists");
+				console.log('order is ignored because position not exists');
 				return;
 			}
 
 			const profit = calculateProfit(orderParams.price, position.entryPrice);
-			const minimumProfit = alertMessage.minProfit ?? parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
+			const minimumProfit =
+				alertMessage.minProfit ??
+				parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
 
-			if (direction === 'long' && profit < minimumProfit || direction === 'short' && (-1 * profit) < minimumProfit ) {
-				console.log("Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}");
+			if (
+				(direction === 'long' && profit < minimumProfit) ||
+				(direction === 'short' && -1 * profit < minimumProfit)
+			) {
+				console.log(
+					`Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}`
+				);
 				return;
 			}
 
 			const sum = Math.abs(position.size);
 
-			size = orderMode === 'full' || newPositionSize == 0 ? sum : Math.min(size, sum);
-		}
-		else if(orderMode === 'full' || newPositionSize == 0)
-		{
+			size =
+				orderMode === 'full' || newPositionSize == 0
+					? sum
+					: Math.min(size, sum);
+		} else if (orderMode === 'full' || newPositionSize == 0) {
 			const position = openedPositions.find((el) => el.market === market);
-			if(!position)
-			{
-				if(newPositionSize == 0)
-				{
-					console.log("ignore this order because new position size is 0 and current position not exists");
+			if (!position) {
+				if (newPositionSize == 0) {
+					console.log(
+						'ignore this order because new position size is 0 and current position not exists'
+					);
 					return;
 				}
-			}
-			else
-			{
-				if(side === OrderSide.SELL && position.size > 0 || side === OrderSide.BUY && position.size < 0)
+			} else {
+				if (
+					(side === OrderSide.SELL && position.size > 0) ||
+					(side === OrderSide.BUY && position.size < 0)
+				)
 					size = Math.abs(position.size);
 			}
 		}
@@ -189,13 +201,13 @@ export class DydxV4Client extends AbstractDexClient {
 			size: orderParams.size,
 			orderId: String(clientId)
 		};
-		await this.exportOrder(
-			'DydxV4',
-			alertMessage.strategy,
-			orderResult,
-			alertMessage.price,
-			alertMessage.market
-		);
+		// await this.exportOrder(
+		// 	'DydxV4',
+		// 	alertMessage.strategy,
+		// 	orderResult,
+		// 	alertMessage.price,
+		// 	alertMessage.market
+		// );
 
 		return orderResult;
 	}
@@ -240,7 +252,6 @@ export class DydxV4Client extends AbstractDexClient {
 			process.env.DYDX_V4_MNEMONIC,
 			BECH32_PREFIX
 		);
-		console.log('dYdX v4 Address:', localWallet.address);
 
 		return localWallet;
 	};
@@ -266,28 +277,7 @@ export class DydxV4Client extends AbstractDexClient {
 		return Math.floor(Math.random() * (maxInt32 + 1));
 	}
 
-	private isOrderFilled = async (clientId: string): Promise<boolean> => {
-		const orders = await this.getOrders();
-
-		const order = orders.find((order) => {
-			return order.clientId == clientId;
-		});
-		if (!order) return false;
-
-		console.log('dYdX v4 Order ID: ', order.id);
-
-		return order.status == 'FILLED';
-	};
-
-	getOrders = async () => {
-		const client = this.buildIndexerClient();
-		const localWallet = await this.generateLocalWallet();
-		if (!localWallet) return;
-
-		return await client.account.getSubaccountOrders(localWallet.address, 0);
-	};
-
-	getOpenedPositions = async (): Promise<PositionData> => {
+	public getOpenedPositions = async (): Promise<PositionData> => {
 		const client = this.buildIndexerClient();
 		const localWallet = await this.generateLocalWallet();
 		if (!localWallet) return;

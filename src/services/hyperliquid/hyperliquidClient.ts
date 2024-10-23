@@ -23,7 +23,6 @@ export class HyperLiquidClient extends AbstractDexClient {
 			console.log(
 				'HyperLiquid credentials are not set as environment variable'
 			);
-
 		}
 
 		this.client = new ccxt.hyperliquid({
@@ -34,7 +33,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
 	}
 
-	async getIsAccountReady(): Promise<boolean> {
+	public async getIsAccountReady(): Promise<boolean> {
 		try {
 			// Fetched balance indicates connected wallet
 			await this.client.fetchBalance();
@@ -44,10 +43,10 @@ export class HyperLiquidClient extends AbstractDexClient {
 		}
 	}
 
-	async buildOrderParams(alertMessage: AlertObject) {
+	private async buildOrderParams(alertMessage: AlertObject) {
 		const orderSide =
 			alertMessage.order == 'buy' ? OrderSide.BUY : OrderSide.SELL;
-		
+
 		const latestPrice = alertMessage.price;
 		console.log('latestPrice', latestPrice);
 
@@ -68,7 +67,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 		return orderParams;
 	}
 
-	async placeOrder(
+	public async placeOrder(
 		alertMessage: AlertObject,
 		openedPositions: ccxt.Position[],
 		mutex: Mutex
@@ -95,41 +94,53 @@ export class HyperLiquidClient extends AbstractDexClient {
 
 		let size = orderParams.size;
 
-		if (side === OrderSide.SELL && direction === 'long' || side === OrderSide.BUY && direction === 'short') {
+		if (
+			(side === OrderSide.SELL && direction === 'long') ||
+			(side === OrderSide.BUY && direction === 'short')
+		) {
 			// Hyperliquid group all positions in one position per symbol
 			const position = openedPositions.find((el) => el.symbol === market);
 
 			if (!position) {
-				console.log("order is ignored because position not exists");
+				console.log('order is ignored because position not exists');
 				return;
 			}
 
 			const profit = calculateProfit(orderParams.price, position.entryPrice);
-			const minimumProfit = alertMessage.minProfit ?? parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
+			const minimumProfit =
+				alertMessage.minProfit ??
+				parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
 
-			if (direction === 'long' && profit < minimumProfit || direction === 'short' && (-1 * profit) < minimumProfit ) {
-				console.log("Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}");
+			if (
+				(direction === 'long' && profit < minimumProfit) ||
+				(direction === 'short' && -1 * profit < minimumProfit)
+			) {
+				console.log(
+					`Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}`
+				);
 				return;
 			}
 
 			const sum = Math.abs(position.contracts);
 
-			size = orderMode === 'full' || newPositionSize == 0 ? sum : Math.min(size, sum);
-		}
-		else if(orderMode === 'full' || newPositionSize == 0)
-		{
+			size =
+				orderMode === 'full' || newPositionSize == 0
+					? sum
+					: Math.min(size, sum);
+		} else if (orderMode === 'full' || newPositionSize == 0) {
 			const position = openedPositions.find((el) => el.symbol === market);
-			if(!position)
-			{
-				if(newPositionSize == 0)
-				{
-					console.log("ignore this order because new position size is 0 and current position not exists");
+			if (!position) {
+				if (newPositionSize == 0) {
+					console.log(
+						'ignore this order because new position size is 0 and current position not exists'
+					);
 					return;
 				}
-			}
-			else
-			{
-				if(side === OrderSide.SELL && position.contracts > 0 || side === OrderSide.BUY && position.contracts < 0)
+			} else {
+				if (
+					(side === OrderSide.SELL && position.contracts > 0) ||
+					(side === OrderSide.BUY && position.contracts < 0)
+				)
 					size = Math.abs(position.contracts);
 			}
 		}
@@ -147,7 +158,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 		let orderId: string;
 
 		// This solution fixes problem of two parallel calls in exchange, which is not possible
-//		const release = await mutex.acquire();
+		//		const release = await mutex.acquire();
 
 		try {
 			const result = await this.client.createOrder(
@@ -169,7 +180,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 		} catch (e) {
 			console.error(e);
 		} finally {
-//			release();
+			//			release();
 		}
 
 		await _sleep(fillWaitTime);
@@ -201,11 +212,6 @@ export class HyperLiquidClient extends AbstractDexClient {
 		return orderResult;
 	}
 
-	private generateRandomInt32(): number {
-		const maxInt32 = 2147483647;
-		return Math.floor(Math.random() * (maxInt32 + 1));
-	}
-
 	private generateRandomHexString(size: number): string {
 		return `0x${[...Array(size)]
 			.map(() => Math.floor(Math.random() * 16).toString(16))
@@ -224,7 +230,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 		return order.status == 'closed';
 	};
 
-	getOpenedPositions = async (): Promise<ccxt.Position[]> => {
+	public getOpenedPositions = async (): Promise<ccxt.Position[]> => {
 		const vaultAddress = process.env.HYPERLIQUID_VAULT_ADDRESS;
 
 		return this.client.fetchPositions(undefined, {

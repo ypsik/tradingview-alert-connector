@@ -28,7 +28,7 @@ export class BybitClient extends AbstractDexClient {
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
 	}
 
-	async getIsAccountReady(): Promise<boolean> {
+	public async getIsAccountReady(): Promise<boolean> {
 		try {
 			// Fetched balance indicates connected wallet
 			await this.client.fetchBalance();
@@ -38,7 +38,7 @@ export class BybitClient extends AbstractDexClient {
 		}
 	}
 
-	async buildOrderParams(alertMessage: AlertObject) {
+	private async buildOrderParams(alertMessage: AlertObject) {
 		const orderSide =
 			alertMessage.order == 'buy' ? OrderSide.BUY : OrderSide.SELL;
 
@@ -62,7 +62,7 @@ export class BybitClient extends AbstractDexClient {
 		return orderParams;
 	}
 
-	async placeOrder(
+	public async placeOrder(
 		alertMessage: AlertObject,
 		openedPositions: ccxt.Position[],
 		mutex: Mutex
@@ -92,7 +92,6 @@ export class BybitClient extends AbstractDexClient {
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
-			// Hyperliquid group all positions in one position per symbol
 			const position = openedPositions.find((el) => el.symbol === market);
 
 			if (!position) {
@@ -110,7 +109,7 @@ export class BybitClient extends AbstractDexClient {
 				(direction === 'short' && -1 * profit < minimumProfit)
 			) {
 				console.log(
-					'Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}'
+					`Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}`
 				);
 				return;
 			}
@@ -145,6 +144,11 @@ export class BybitClient extends AbstractDexClient {
 		const fillWaitTime =
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
+		let positionIdx: number;
+		if (direction === 'flat') positionIdx = 0;
+		if (direction === 'long') positionIdx = 1;
+		if (direction === 'short') positionIdx = 2;
+
 		const clientId = this.generateRandomHexString(32);
 		console.log('Client ID: ', clientId);
 
@@ -152,20 +156,21 @@ export class BybitClient extends AbstractDexClient {
 		let orderId: string;
 
 		// This solution fixes problem of two parallel calls in exchange, which is not possible
-		const release = await mutex.acquire();
+		// const release = await mutex.acquire();
 
 		try {
 			const result = await this.client.createOrder(
 				market,
 				type,
-				side,
+				side.toLowerCase(),
 				size,
 				price,
 				{
 					clientOrderId: clientId,
 					timeInForce,
 					postOnly,
-					reduceOnly
+					reduceOnly,
+					position_idx: positionIdx
 				}
 			);
 			console.log('[Bybit] Transaction Result: ', result);
@@ -173,14 +178,14 @@ export class BybitClient extends AbstractDexClient {
 		} catch (e) {
 			console.error(e);
 		} finally {
-			release();
+			// release();
 		}
 
 		await _sleep(fillWaitTime);
 
 		const isFilled = await this.isOrderFilled(orderId, market);
 		if (!isFilled) {
-			const release = await mutex.acquire();
+			// const release = await mutex.acquire();
 
 			try {
 				await this.client.cancelOrder(orderId, market, {
@@ -190,7 +195,7 @@ export class BybitClient extends AbstractDexClient {
 			} catch (e) {
 				console.log(e);
 			} finally {
-				release();
+				// release();
 			}
 		}
 		const orderResult: OrderResult = {
@@ -200,11 +205,6 @@ export class BybitClient extends AbstractDexClient {
 		};
 
 		return orderResult;
-	}
-
-	private generateRandomInt32(): number {
-		const maxInt32 = 2147483647;
-		return Math.floor(Math.random() * (maxInt32 + 1));
 	}
 
 	private generateRandomHexString(size: number): string {
@@ -217,18 +217,19 @@ export class BybitClient extends AbstractDexClient {
 		orderId: string,
 		market: string
 	): Promise<boolean> => {
-		const order = await this.client.fetchOrder(orderId, market);
+		try {
+			const order = await this.client.fetchOpenOrder(orderId, market);
 
-		console.log('Bybit Order ID: ', order.id);
+			console.log('Bybit Order ID: ', order.id);
 
-		return order.status == 'closed';
+			return order.status == 'closed';
+		} catch (e) {
+			console.log(e);
+			return false;
+		}
 	};
 
-	getOpenedPositions = async (): Promise<ccxt.Position[]> => {
-		const vaultAddress = process.env.HYPERLIQUID_VAULT_ADDRESS;
-
-		return this.client.fetchPositions(undefined, {
-			...(vaultAddress && { user: vaultAddress })
-		});
+	public getOpenedPositions = async (): Promise<ccxt.Position[]> => {
+		return this.client.fetchPositions();
 	};
 }
