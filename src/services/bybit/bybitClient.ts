@@ -10,24 +10,19 @@ import { OrderSide, OrderType } from '@dydxprotocol/v4-client-js';
 import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 
-export class HyperLiquidClient extends AbstractDexClient {
-	private client: ccxt.hyperliquid;
+export class BybitClient extends AbstractDexClient {
+	private client: ccxt.bybit;
 
 	constructor() {
 		super();
 
-		if (
-			!process.env.HYPERLIQUID_PRIVATE_KEY ||
-			!process.env.HYPERLIQUID_WALLET_ADDRESS
-		) {
-			console.log(
-				'HyperLiquid credentials are not set as environment variable'
-			);
+		if (!process.env.BYBIT_API_KEY || !process.env.BYBIT_SECRET) {
+			console.log('Bybit credentials are not set as environment variable');
 		}
 
-		this.client = new ccxt.hyperliquid({
-			privateKey: process.env.HYPERLIQUID_PRIVATE_KEY,
-			walletAddress: process.env.HYPERLIQUID_WALLET_ADDRESS
+		this.client = new ccxt.bybit({
+			apiKey: process.env.BYBIT_API_KEY,
+			secret: process.env.BYBIT_SECRET
 		});
 
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
@@ -63,7 +58,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 			size: Number(orderSize),
 			price: Number(alertMessage.price)
 		};
-		console.log('orderParams for hyperliquid', orderParams);
+		console.log('orderParams for bybit', orderParams);
 		return orderParams;
 	}
 
@@ -77,14 +72,13 @@ export class HyperLiquidClient extends AbstractDexClient {
 		const market = orderParams.market;
 		const type = OrderType.LIMIT;
 		const side = orderParams.side;
-		const mode = process.env.HYPERLIQUID_MODE || '';
+		const mode = process.env.BYBIT_MODE || '';
 		const direction = alertMessage.direction;
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
 
 		const timeInForce = 'gtc';
 		const slippagePercentage = parseFloat(alertMessage.slippagePercentage); // Get from alert
-		const vaultAddress = process.env.HYPERLIQUID_VAULT_ADDRESS;
 		const orderMode = alertMessage.orderMode || '';
 		const newPositionSize = alertMessage.newPositionSize;
 		const price =
@@ -98,7 +92,6 @@ export class HyperLiquidClient extends AbstractDexClient {
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
-			// Hyperliquid group all positions in one position per symbol
 			const position = openedPositions.find((el) => el.symbol === market);
 
 			if (!position) {
@@ -151,6 +144,11 @@ export class HyperLiquidClient extends AbstractDexClient {
 		const fillWaitTime =
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
+		let positionIdx: number;
+		if (direction === 'flat') positionIdx = 0;
+		if (direction === 'long') positionIdx = 1;
+		if (direction === 'short') positionIdx = 2;
+
 		const clientId = this.generateRandomHexString(32);
 		console.log('Client ID: ', clientId);
 
@@ -158,13 +156,13 @@ export class HyperLiquidClient extends AbstractDexClient {
 		let orderId: string;
 
 		// This solution fixes problem of two parallel calls in exchange, which is not possible
-		//		const release = await mutex.acquire();
+		// const release = await mutex.acquire();
 
 		try {
 			const result = await this.client.createOrder(
 				market,
 				type,
-				side,
+				side.toLowerCase(),
 				size,
 				price,
 				{
@@ -172,35 +170,32 @@ export class HyperLiquidClient extends AbstractDexClient {
 					timeInForce,
 					postOnly,
 					reduceOnly,
-					...(vaultAddress && { vaultAddress })
+					position_idx: positionIdx
 				}
 			);
-			console.log('[Hyperliquid] Transaction Result: ', result);
+			console.log('[Bybit] Transaction Result: ', result);
 			orderId = result.id;
 		} catch (e) {
 			console.error(e);
 		} finally {
-			//			release();
+			// release();
 		}
 
 		await _sleep(fillWaitTime);
 
-		const isFilled = await this.isOrderFilled(orderId, market, {
-			...(vaultAddress && { user: vaultAddress })
-		});
+		const isFilled = await this.isOrderFilled(orderId, market);
 		if (!isFilled) {
-			const release = await mutex.acquire();
+			// const release = await mutex.acquire();
 
 			try {
 				await this.client.cancelOrder(orderId, market, {
-					clientOrderId: clientId,
-					...(vaultAddress && { vaultAddress })
+					clientOrderId: clientId
 				});
-				console.log(`HyperLiquid Order ID ${orderId} canceled`);
+				console.log(`Bybit Order ID ${orderId} canceled`);
 			} catch (e) {
 				console.log(e);
 			} finally {
-				release();
+				// release();
 			}
 		}
 		const orderResult: OrderResult = {
@@ -220,21 +215,21 @@ export class HyperLiquidClient extends AbstractDexClient {
 
 	private isOrderFilled = async (
 		orderId: string,
-		market: string,
-		params: { user?: string }
+		market: string
 	): Promise<boolean> => {
-		const order = await this.client.fetchOrder(orderId, market, params);
+		try {
+			const order = await this.client.fetchOpenOrder(orderId, market);
 
-		console.log('HyperLiquid Order ID: ', order.id);
+			console.log('Bybit Order ID: ', order.id);
 
-		return order.status == 'closed';
+			return order.status == 'closed';
+		} catch (e) {
+			console.log(e);
+			return false;
+		}
 	};
 
 	public getOpenedPositions = async (): Promise<ccxt.Position[]> => {
-		const vaultAddress = process.env.HYPERLIQUID_VAULT_ADDRESS;
-
-		return this.client.fetchPositions(undefined, {
-			...(vaultAddress && { user: vaultAddress })
-		});
+		return this.client.fetchPositions();
 	};
 }
