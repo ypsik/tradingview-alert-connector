@@ -11,22 +11,22 @@ import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
 
-export class BybitClient extends AbstractDexClient {
-	private readonly client: ccxt.bybit;
+export class BingxClient extends AbstractDexClient {
+	private readonly client: ccxt.bingx;
 	private readonly logger: CustomLogger;
 
 	constructor() {
 		super();
 
-		this.logger = new CustomLogger('Bybit');
+		this.logger = new CustomLogger('Bingx');
 
-		if (!process.env.BYBIT_API_KEY || !process.env.BYBIT_SECRET) {
+		if (!process.env.BINGX_API_KEY || !process.env.BINGX_SECRET) {
 			this.logger.warn('Credentials are not set as environment variable');
 		}
 
-		this.client = new ccxt.bybit({
-			apiKey: process.env.BYBIT_API_KEY,
-			secret: process.env.BYBIT_SECRET
+		this.client = new ccxt.bingx({
+			apiKey: process.env.BINGX_API_KEY,
+			secret: process.env.BINGX_SECRET
 		});
 
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
@@ -76,7 +76,7 @@ export class BybitClient extends AbstractDexClient {
 		const market = orderParams.market;
 		const type = OrderType.LIMIT;
 		const side = orderParams.side;
-		const mode = process.env.BYBIT_MODE || '';
+		const mode = process.env.BINGX_MODE || '';
 		const direction = alertMessage.direction;
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
@@ -222,7 +222,9 @@ export class BybitClient extends AbstractDexClient {
 		market: string
 	): Promise<boolean> => {
 		try {
-			const order = await this.client.fetchOpenOrder(orderId, market);
+			const orders = await this.client.fetchOpenOrders(market);
+
+			const order = orders.find((el) => el.id === orderId);
 
 			this.logger.log('Order ID: ', order.id);
 

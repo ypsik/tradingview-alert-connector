@@ -25,13 +25,22 @@ import 'dotenv/config';
 import config from 'config';
 import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
+import { CustomLogger } from '../logger/logger.service';
 
 export class DydxV4Client extends AbstractDexClient {
+	private readonly logger: CustomLogger;
+
+	constructor() {
+		super();
+
+		this.logger = new CustomLogger('DydxV4');
+	}
+
 	public async getIsAccountReady() {
 		const subAccount = await this.getSubAccount();
 		if (!subAccount) return false;
 
-		console.log('dydx v4 account: ' + JSON.stringify(subAccount, null, 2));
+		this.logger.log('Account: ' + JSON.stringify(subAccount, null, 2));
 		return (Number(subAccount.freeCollateral) > 0) as boolean;
 	}
 
@@ -47,7 +56,7 @@ export class DydxV4Client extends AbstractDexClient {
 
 			return response.subaccount;
 		} catch (error) {
-			console.error(error);
+			this.logger.error(error);
 		}
 	}
 
@@ -56,7 +65,7 @@ export class DydxV4Client extends AbstractDexClient {
 			alertMessage.order == 'buy' ? OrderSide.BUY : OrderSide.SELL;
 
 		const latestPrice = alertMessage.price;
-		console.log('latestPrice', latestPrice);
+		this.logger.log('latestPrice', latestPrice);
 
 		let orderSize: number;
 		if (alertMessage.sizeByLeverage) {
@@ -81,7 +90,7 @@ export class DydxV4Client extends AbstractDexClient {
 			size: Number(orderSize),
 			price: Number(alertMessage.price)
 		};
-		console.log('orderParams for dydx', orderParams);
+		this.logger.log('orderParams', orderParams);
 		return orderParams;
 	}
 
@@ -121,7 +130,7 @@ export class DydxV4Client extends AbstractDexClient {
 			const position = openedPositions.find((el) => el.market === market);
 
 			if (!position) {
-				console.log('order is ignored because position not exists');
+				this.logger.log('order is ignored because position not exists');
 				return;
 			}
 
@@ -134,7 +143,7 @@ export class DydxV4Client extends AbstractDexClient {
 				(direction === 'long' && profit < minimumProfit) ||
 				(direction === 'short' && -1 * profit < minimumProfit)
 			) {
-				console.log(
+				this.logger.log(
 					`Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}`
 				);
 				return;
@@ -150,7 +159,7 @@ export class DydxV4Client extends AbstractDexClient {
 			const position = openedPositions.find((el) => el.market === market);
 			if (!position) {
 				if (newPositionSize == 0) {
-					console.log(
+					this.logger.log(
 						'ignore this order because new position size is 0 and current position not exists'
 					);
 					return;
@@ -169,7 +178,7 @@ export class DydxV4Client extends AbstractDexClient {
 		const fillWaitTime = Number(process.env.FILL_WAIT_TIME_SECONDS) || 300; // 5 minutes by default
 
 		const clientId = this.generateRandomInt32();
-		console.log('Client ID: ', clientId);
+		this.logger.log('Client ID: ', clientId);
 
 		// This solution fixes problem of two parallel calls in exchange, which is not possible
 		const release = await mutex.acquire();
@@ -189,9 +198,9 @@ export class DydxV4Client extends AbstractDexClient {
 				postOnly,
 				reduceOnly
 			);
-			console.log('[Dydxv4] Transaction Result: ', tx);
+			this.logger.log('Transaction Result: ', tx);
 		} catch (e) {
-			console.error(e);
+			this.logger.error(e);
 		} finally {
 			release();
 		}
@@ -233,7 +242,7 @@ export class DydxV4Client extends AbstractDexClient {
 		try {
 			client = await CompositeClient.connect(network);
 		} catch (e) {
-			console.error(e);
+			this.logger.error(e);
 			throw new Error('Failed to connect to dYdX v4 client');
 		}
 
@@ -244,7 +253,7 @@ export class DydxV4Client extends AbstractDexClient {
 
 	private generateLocalWallet = async () => {
 		if (!process.env.DYDX_V4_MNEMONIC) {
-			console.log('DYDX_V4_MNEMONIC is not set as environment variable');
+			this.logger.warn('DYDX_V4_MNEMONIC is not set as environment variable');
 			return;
 		}
 

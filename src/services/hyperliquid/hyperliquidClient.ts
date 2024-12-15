@@ -9,20 +9,22 @@ import 'dotenv/config';
 import { OrderSide, OrderType } from '@dydxprotocol/v4-client-js';
 import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
+import { CustomLogger } from '../logger/logger.service';
 
 export class HyperLiquidClient extends AbstractDexClient {
-	private client: ccxt.hyperliquid;
+	private readonly client: ccxt.hyperliquid;
+	private readonly logger: CustomLogger;
 
 	constructor() {
 		super();
+
+		this.logger = new CustomLogger('HyperLiquid');
 
 		if (
 			!process.env.HYPERLIQUID_PRIVATE_KEY ||
 			!process.env.HYPERLIQUID_WALLET_ADDRESS
 		) {
-			console.log(
-				'HyperLiquid credentials are not set as environment variable'
-			);
+			this.logger.warn('Credentials are not set as environment variable');
 		}
 
 		this.client = new ccxt.hyperliquid({
@@ -48,7 +50,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 			alertMessage.order == 'buy' ? OrderSide.BUY : OrderSide.SELL;
 
 		const latestPrice = alertMessage.price;
-		console.log('latestPrice', latestPrice);
+		this.logger.log('latestPrice', latestPrice);
 
 		let orderSize: number;
 		orderSize = alertMessage.size;
@@ -63,7 +65,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 			size: Number(orderSize),
 			price: Number(alertMessage.price)
 		};
-		console.log('orderParams for hyperliquid', orderParams);
+		this.logger.log('orderParams', orderParams);
 		return orderParams;
 	}
 
@@ -102,7 +104,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 			const position = openedPositions.find((el) => el.symbol === market);
 
 			if (!position) {
-				console.log('order is ignored because position not exists');
+				this.logger.log('order is ignored because position not exists');
 				return;
 			}
 
@@ -115,7 +117,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 				(direction === 'long' && profit < minimumProfit) ||
 				(direction === 'short' && -1 * profit < minimumProfit)
 			) {
-				console.log(
+				this.logger.log(
 					`Order is ignored because profit level not reached: current profit ${profit}, direction ${direction}`
 				);
 				return;
@@ -131,7 +133,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 			const position = openedPositions.find((el) => el.symbol === market);
 			if (!position) {
 				if (newPositionSize == 0) {
-					console.log(
+					this.logger.log(
 						'ignore this order because new position size is 0 and current position not exists'
 					);
 					return;
@@ -152,7 +154,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
 		const clientId = this.generateRandomHexString(32);
-		console.log('Client ID: ', clientId);
+		this.logger.log('Client ID: ', clientId);
 
 		// For cancelling if needed
 		let orderId: string;
@@ -175,7 +177,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 					...(vaultAddress && { vaultAddress })
 				}
 			);
-			console.log('[Hyperliquid] Transaction Result: ', result);
+			this.logger.log('Transaction Result: ', result);
 			orderId = result.id;
 		} catch (e) {
 			console.error(e);
@@ -196,9 +198,9 @@ export class HyperLiquidClient extends AbstractDexClient {
 					clientOrderId: clientId,
 					...(vaultAddress && { vaultAddress })
 				});
-				console.log(`HyperLiquid Order ID ${orderId} canceled`);
+				this.logger.log(`Order ID ${orderId} canceled`);
 			} catch (e) {
-				console.log(e);
+				this.logger.log(e);
 			} finally {
 				release();
 			}
@@ -225,7 +227,7 @@ export class HyperLiquidClient extends AbstractDexClient {
 	): Promise<boolean> => {
 		const order = await this.client.fetchOrder(orderId, market, params);
 
-		console.log('HyperLiquid Order ID: ', order.id);
+		this.logger.log('Order ID: ', order.id);
 
 		return order.status == 'closed';
 	};
