@@ -5,9 +5,12 @@ import * as Tracing from '@sentry/tracing';
 import { CaptureConsole as CaptureConsoleIntegration } from '@sentry/integrations';
 import helmet from 'helmet';
 import 'dotenv/config';
+import { CustomLogger } from './services/logger/logger.service';
 
 const app: express.Express = express();
 const port = process.env.PORT || 3000;
+
+const logger = new CustomLogger('Main');
 
 if (process.env.SENTRY_DNS) {
 	Sentry.init({
@@ -33,7 +36,7 @@ if (process.env.SENTRY_DNS) {
 	app.use(Sentry.Handlers.requestHandler());
 	app.use(Sentry.Handlers.tracingHandler());
 
-	console.log('initialized Sentry.io');
+	logger.log('initialized Sentry.io');
 }
 
 app.use(helmet());
@@ -48,5 +51,5 @@ if (process.env.SENTRY_DNS) {
 }
 
 app.listen(port, () => {
-	console.log(`TV-Connector web server listening on port ${port}`);
+	logger.log(`TV-Connector web server listening on port ${port}`);
 });

@@ -6,26 +6,42 @@ import { MarketData } from '../types';
 import * as fs from 'fs';
 import type { Position } from 'ccxt';
 import { Mutex } from 'async-mutex';
+import { CustomLogger } from '../services/logger/logger.service';
+
+const logger = new CustomLogger('Controller');
 
 const router: Router = express.Router();
 const staticDexRegistry = new DexRegistry();
 const dydxv4Client = staticDexRegistry.getDex('dydxv4');
 const hyperliquidClient = staticDexRegistry.getDex('hyperliquid');
 const bybitClient = staticDexRegistry.getDex('bybit');
+const bitgetClient = staticDexRegistry.getDex('bitget');
+const bingxClient = staticDexRegistry.getDex('bingx');
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
 let openedPositionsBybit: Position[] = [];
+let openedPositionsBitget: Position[] = [];
+let openedPositionsBingx: Position[] = [];
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
 const mutexBybit = new Mutex();
+const mutexBitget = new Mutex();
+const mutexBingx = new Mutex();
+
+type SupportedExchanges =
+	| 'Dydxv4'
+	| 'Hyperliquid'
+	| 'Bybit'
+	| 'Bitget'
+	| 'Bingx';
 
 function writeNewEntries({
 	exchange,
 	positions
 }: {
-	exchange: 'Dydxv4' | 'Hyperliquid' | 'Bybit';
+	exchange: SupportedExchanges;
 	positions: MarketData[] | Position[];
 }) {
 	const folderPath = './data/custom/exports/';
@@ -68,9 +84,7 @@ function writeNewEntries({
 				typedPosition.netFunding || '',
 				typedPosition.subaccountNumber?.toString() || ''
 			];
-		}
-
-		if (exchange === 'Hyperliquid' || exchange === 'Bybit') {
+		} else {
 			const typedPosition = position as Position;
 
 			record = [
@@ -122,6 +136,16 @@ const getExchangeVariables = (exchange: string) => {
 				openedPositions: openedPositionsBybit,
 				mutex: mutexBybit
 			};
+		case 'bitget':
+			return {
+				openedPositions: openedPositionsBitget,
+				mutex: mutexBitget
+			};
+		case 'bingx':
+			return {
+				openedPositions: openedPositionsBingx,
+				mutex: mutexBingx
+			};
 	}
 };
 
@@ -135,7 +159,7 @@ const dydxv4Updater = async () => {
 			positions: openedPositionsDydxv4
 		});
 	} catch {
-		console.log(`Dydxv4 is not working. Time: ${new Date()}`);
+		logger.warn(`Dydxv4 is not working. Time: ${new Date()}`);
 	}
 };
 
@@ -148,7 +172,7 @@ const hyperLiquidUpdater = async () => {
 			positions: openedPositionsHyperliquid
 		});
 	} catch {
-		console.log(`Hyperliquid is not working. Time: ${new Date()}`);
+		logger.warn(`Hyperliquid is not working. Time: ${new Date()}`);
 	}
 };
 
@@ -161,14 +185,46 @@ const bybitUpdater = async () => {
 			positions: openedPositionsBybit
 		});
 	} catch {
-		console.log(`Bybit is not working. Time: ${new Date()}`);
+		logger.warn(`Bybit is not working. Time: ${new Date()}`);
+	}
+};
+
+const bitgetUpdater = async () => {
+	try {
+		const bitgetPositions = await bitgetClient.getOpenedPositions();
+		openedPositionsBitget = bitgetPositions as unknown as Position[];
+		writeNewEntries({
+			exchange: 'Bitget',
+			positions: openedPositionsBitget
+		});
+	} catch {
+		logger.warn(`Bitget is not working. Time: ${new Date()}`);
+	}
+};
+
+const bingxUpdater = async () => {
+	try {
+		const bingxPositions = await bingxClient.getOpenedPositions();
+		openedPositionsBingx = bingxPositions as unknown as Position[];
+		writeNewEntries({
+			exchange: 'Bingx',
+			positions: openedPositionsBingx
+		});
+	} catch {
+		logger.warn(`Bingx is not working. Time: ${new Date()}`);
 	}
 };
 
 CronJob.from({
 	cronTime: process.env.UPDATE_POSITIONS_TIMER || '*/30 * * * * *', // Every 30 seconds
 	onTick: async () => {
-		await Promise.all([dydxv4Updater(), hyperLiquidUpdater(), bybitUpdater()]);
+		await Promise.all([
+			dydxv4Updater(),
+			hyperLiquidUpdater(),
+			bybitUpdater(),
+			bitgetUpdater(),
+			bingxUpdater()
+		]);
 	},
 	runOnInit: true,
 	start: true
@@ -179,18 +235,10 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/accounts', async (req, res) => {
-	console.log('Received GET request.');
+	logger.log('Received GET request.');
 
 	const dexRegistry = new DexRegistry();
-	const dexNames = [
-		'dydxv3',
-		'dydxv4',
-		'perpetual',
-		'gmx',
-		'bluefin',
-		'hyperliquid',
-		'bybit'
-	];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx'];
 	const dexClients = dexNames.map((name) => dexRegistry.getDex(name));
 
 	try {
@@ -199,23 +247,21 @@ router.get('/accounts', async (req, res) => {
 		);
 
 		const message = {
-			dYdX_v3: accountStatuses[0], // dydxv3
-			dYdX_v4: accountStatuses[1], // dydxv4
-			PerpetualProtocol: accountStatuses[2], // perpetual
-			GMX: accountStatuses[3], // gmx
-			Bluefin: accountStatuses[4], // bluefin
-			HyperLiquid: accountStatuses[5], // hyperliquid
-			Bybit: accountStatuses[6] // bybit
+			dYdX_v4: accountStatuses[0], // dydxv4
+			HyperLiquid: accountStatuses[1], // hyperliquid
+			Bybit: accountStatuses[2], // bybit
+			Bitget: accountStatuses[3], // bitget
+			Bingx: accountStatuses[4] // bingx
 		};
 		res.send(message);
 	} catch (error) {
-		console.error('Failed to get account readiness:', error);
+		logger.error('Failed to get account readiness:', error);
 		res.status(500).send('Internal server error');
 	}
 });
 
 router.post('/', async (req, res) => {
-	console.log('Recieved Tradingview strategy alert:', req.body);
+	logger.log('Recieved Tradingview strategy alert:', req.body);
 
 	const validated = await validateAlert(req.body);
 	if (!validated) {

@@ -84,3 +84,4 @@ typings/
 .vscode/
 /scripts/*
 .DS_Store
+data/custom/exports

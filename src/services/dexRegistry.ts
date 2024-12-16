@@ -1,11 +1,9 @@
 import { AbstractDexClient } from './abstractDexClient';
-import { BluefinDexClient } from './bluefin/bluefinClient';
+import { BingxClient } from './bingx/bingxClient';
+import { BitgetClient } from './bitget/bitgetClient';
 import { BybitClient } from './bybit/bybitClient';
-import { DydxV3Client } from './dydx_v3/dydxV3Client';
 import { DydxV4Client } from './dydx_v4/dydxV4Client';
-import { GmxClient } from './gmx/gmxClient';
 import { HyperLiquidClient } from './hyperliquid/hyperliquidClient';
-import { PerpClient } from './perp/perpClient';
 
 export class DexRegistry {
 	private registeredDexs: Map<string, AbstractDexClient>;
@@ -13,13 +11,10 @@ export class DexRegistry {
 	constructor() {
 		this.registeredDexs = new Map();
 		this.registeredDexs.set('dydxv4', new DydxV4Client());
-		this.registeredDexs.set('dydxv3', new DydxV3Client());
-		this.registeredDexs.set('dydx', new DydxV3Client());
-		this.registeredDexs.set('perpetual', new PerpClient());
-		this.registeredDexs.set('gmx', new GmxClient());
-		this.registeredDexs.set('bluefin', new BluefinDexClient());
 		this.registeredDexs.set('hyperliquid', new HyperLiquidClient());
 		this.registeredDexs.set('bybit', new BybitClient());
+		this.registeredDexs.set('bitget', new BitgetClient());
+		this.registeredDexs.set('bingx', new BingxClient());
 	}
 
 	getDex(dexKey: string): AbstractDexClient {
