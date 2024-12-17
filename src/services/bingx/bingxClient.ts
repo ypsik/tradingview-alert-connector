@@ -81,7 +81,7 @@ export class BingxClient extends AbstractDexClient {
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
 
-		const timeInForce = 'gtc';
+		const timeInForce = 'GTC';
 		const slippagePercentage = parseFloat(alertMessage.slippagePercentage); // Get from alert
 		const orderMode = alertMessage.orderMode || '';
 		const newPositionSize = alertMessage.newPositionSize;
@@ -148,11 +148,6 @@ export class BingxClient extends AbstractDexClient {
 		const fillWaitTime =
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
-		let positionIdx: number;
-		if (direction === 'flat') positionIdx = 0;
-		if (direction === 'long') positionIdx = 1;
-		if (direction === 'short') positionIdx = 2;
-
 		const clientId = this.generateRandomHexString(32);
 		this.logger.log('Client ID: ', clientId);
 
@@ -173,8 +168,8 @@ export class BingxClient extends AbstractDexClient {
 					clientOrderId: clientId,
 					timeInForce,
 					postOnly,
-					reduceOnly,
-					position_idx: positionIdx
+					// reduceOnly,
+					positionSide: direction.toUpperCase()
 				}
 			);
 			this.logger.log('Transaction Result: ', result);
