@@ -84,6 +84,7 @@ export class BitgetClient extends AbstractDexClient {
 		const mode = process.env.BITGET_MODE || '';
 		const direction = alertMessage.direction;
 		const hedged = true;
+		let tradeSide = 'open'
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
 
@@ -102,6 +103,7 @@ export class BitgetClient extends AbstractDexClient {
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
+			tradeSide = 'close'
 			const position = openedPositions.find((el) => el.symbol === market);
 
 			if (!position) {
@@ -175,7 +177,8 @@ export class BitgetClient extends AbstractDexClient {
 					timeInForce,
 					postOnly,
 					reduceOnly,
-					hedged
+					hedged,
+					tradeSide
 				}
 			);
 			this.logger.log('Transaction Result: ', result);
