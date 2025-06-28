@@ -223,12 +223,16 @@ export class KrakenClient extends AbstractDexClient {
 		market: string
 	): Promise<boolean> => {
 		try {
-			const order = await this.client.fetchOpenOrders(orderId);
+			const order = await this.client.fetchOrder(orderId, market);
 
-//			this.logger.log('Order ID: ', order.id);
+			this.logger.log('Order ID: ', order.id);
 
-//			return order.status == 'closed';
-			return true;
+			const isClosed = order.status === 'closed' || order.status === 'filled';
+    			const filledEnough =
+      			order.filled && order.amount && order.filled >= order.amount * 0.999;
+
+    			return isClosed && filledEnough;
+			
 		} catch (e) {
 			this.logger.log(e);
 			return false;
