@@ -17,25 +17,30 @@ const hyperliquidClient = staticDexRegistry.getDex('hyperliquid');
 const bybitClient = staticDexRegistry.getDex('bybit');
 const bitgetClient = staticDexRegistry.getDex('bitget');
 const bingxClient = staticDexRegistry.getDex('bingx');
+const krakenClient = staticDexRegistry.getDex('kraken');
+
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
 let openedPositionsBybit: Position[] = [];
 let openedPositionsBitget: Position[] = [];
 let openedPositionsBingx: Position[] = [];
+let openedPositionsKraken: Position[] = [];
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
 const mutexBybit = new Mutex();
 const mutexBitget = new Mutex();
 const mutexBingx = new Mutex();
+const mutexKraken = new Mutex();
 
 type SupportedExchanges =
 	| 'Dydxv4'
 	| 'Hyperliquid'
 	| 'Bybit'
 	| 'Bitget'
-	| 'Bingx';
+	| 'Bingx'
+	| 'Kraken';
 
 function writeNewEntries({
 	exchange,
@@ -146,6 +151,11 @@ const getExchangeVariables = (exchange: string) => {
 				openedPositions: openedPositionsBingx,
 				mutex: mutexBingx
 			};
+		case 'kraken':
+                        return {
+                                openedPositions: openedPositionsKraken,
+                                mutex: mutexKraken
+                        };
 	}
 };
 
@@ -215,6 +225,19 @@ const bingxUpdater = async () => {
 	}
 };
 
+const krakenUpdater = async () => {
+        try {
+                const krakenPositions = await krakenClient.getOpenedPositions();
+                openedPositionsKraken = krakenPositions as unknown as Position[];
+                writeNewEntries({
+                        exchange: 'Kraken',
+                        positions: openedPositionsKraken
+                });
+        } catch {
+                logger.warn(`Kraken is not working. Time: ${new Date()}`);
+        }
+};
+
 CronJob.from({
 	cronTime: process.env.UPDATE_POSITIONS_TIMER || '*/30 * * * * *', // Every 30 seconds
 	onTick: async () => {
@@ -223,7 +246,8 @@ CronJob.from({
 			hyperLiquidUpdater(),
 			bybitUpdater(),
 			bitgetUpdater(),
-			bingxUpdater()
+			bingxUpdater(),
+			krakenUpdater()
 		]);
 	},
 	runOnInit: true,
@@ -238,7 +262,7 @@ router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
 	const dexRegistry = new DexRegistry();
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken'];
 	const dexClients = dexNames.map((name) => dexRegistry.getDex(name));
 
 	try {
@@ -251,7 +275,8 @@ router.get('/accounts', async (req, res) => {
 			HyperLiquid: accountStatuses[1], // hyperliquid
 			Bybit: accountStatuses[2], // bybit
 			Bitget: accountStatuses[3], // bitget
-			Bingx: accountStatuses[4] // bingx
+			Bingx: accountStatuses[4], // bingx
+			Kraken: accountStatuses[5] // kraken
 		};
 		res.send(message);
 	} catch (error) {

@@ -10,25 +10,25 @@ import { OrderSide, OrderType } from '@dydxprotocol/v4-client-js';
 import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
-import limit from 'simple-rate-limiter';
 
-export class BingxClient extends AbstractDexClient {
-	private readonly client: ccxt.bingx;
+export class KrakenClient extends AbstractDexClient {
+	private readonly client: ccxt.krakenfutures;
 	private readonly logger: CustomLogger;
 
 	constructor() {
 		super();
 
-		this.logger = new CustomLogger('Bingx');
+		this.logger = new CustomLogger('kraken');
 
-		if (!process.env.BINGX_API_KEY || !process.env.BINGX_SECRET) {
+		if (!process.env.KRAKEN_FUTURES_API_KEY || !process.env.KRAKEN_FUTURES_API_SECRET) {
 			this.logger.warn('Credentials are not set as environment variable');
 		}
 
-		this.client = new ccxt.bingx({
-			apiKey: process.env.BINGX_API_KEY,
-			secret: process.env.BINGX_SECRET
-		});
+		this.client = new ccxt.krakenfutures({
+			apiKey: process.env.KRAKEN_FUTURES_API_KEY,
+  			secret: process.env.KRAKEN_FUTURES_API_SECRET,
+			enableRateLimit: true,
+			});
 
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
 	}
@@ -42,15 +42,6 @@ export class BingxClient extends AbstractDexClient {
 			return false;
 		}
 	}
-
-	private limitedCreateOrder = limit(this.createOrder.bind(this)).to(4).per(1000); 
-	public async createOrder(orderData: any) {
-	    // Logik zum Erstellen einer Order bei BingX
-	}
-
-	public async createOrderWithLimit(orderData: any) {
-	    await this.limitedCreateOrder(orderData);
-  	}
 
 	private async buildOrderParams(alertMessage: AlertObject) {
 		const orderSide =
@@ -86,12 +77,12 @@ export class BingxClient extends AbstractDexClient {
 		const market = orderParams.market;
 		const type = OrderType.LIMIT;
 		const side = orderParams.side;
-		const mode = process.env.BINGX_MODE || '';
+		const mode = process.env.BYBIT_MODE || '';
 		const direction = alertMessage.direction;
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
 
-		const timeInForce = 'GTC';
+		const timeInForce = 'gtc';
 		const slippagePercentage = parseFloat(alertMessage.slippagePercentage); // Get from alert
 		const orderMode = alertMessage.orderMode || '';
 		const newPositionSize = alertMessage.newPositionSize;
@@ -158,6 +149,11 @@ export class BingxClient extends AbstractDexClient {
 		const fillWaitTime =
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
+		let positionIdx: number;
+		if (direction === 'flat') positionIdx = 0;
+		if (direction === 'long') positionIdx = 1;
+		if (direction === 'short') positionIdx = 2;
+
 		const clientId = this.generateRandomHexString(32);
 		this.logger.log('Client ID: ', clientId);
 
@@ -178,8 +174,8 @@ export class BingxClient extends AbstractDexClient {
 					clientOrderId: clientId,
 					timeInForce,
 					postOnly,
-					// reduceOnly,
-					positionSide: direction.toUpperCase()
+					reduceOnly,
+					position_idx: positionIdx
 				}
 			);
 			this.logger.log('Transaction Result: ', result);
@@ -227,13 +223,12 @@ export class BingxClient extends AbstractDexClient {
 		market: string
 	): Promise<boolean> => {
 		try {
-			const orders = await this.client.fetchOpenOrders(market);
+			const order = await this.client.fetchOpenOrders(orderId);
 
-			const order = orders.find((el) => el.id === orderId);
+//			this.logger.log('Order ID: ', order.id);
 
-			this.logger.log('Order ID: ', order.id);
-
-			return order.status == 'closed';
+//			return order.status == 'closed';
+			return true;
 		} catch (e) {
 			this.logger.log(e);
 			return false;
