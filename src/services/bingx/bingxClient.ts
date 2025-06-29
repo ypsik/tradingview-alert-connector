@@ -27,7 +27,8 @@ export class BingxClient extends AbstractDexClient {
 
 		this.client = new ccxt.bingx({
 			apiKey: process.env.BINGX_API_KEY,
-			secret: process.env.BINGX_SECRET
+			secret: process.env.BINGX_SECRET,
+			enableRateLimit: true
 		});
 
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
