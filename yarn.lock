@@ -4792,6 +4792,11 @@ signal-exit@^3.0.3, signal-exit@^3.0.7:
   resolved "https://registry.npmjs.org/signal-exit/-/signal-exit-3.0.7.tgz"
   integrity sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==
 
+simple-rate-limiter@^0.5.0:
+  version "0.5.0"
+  resolved "https://registry.yarnpkg.com/simple-rate-limiter/-/simple-rate-limiter-0.5.0.tgz#0c9ab3c10343c7fda6724a32d70dca794e99c253"
+  integrity sha512-03+IWcxofJ1K0IwlaNSZzyf1MC3LZijsCnYxzFLWwhHhS8UiQOJbDYe9smxlTNktvys+vQnEIAxoStkJkUrvmA==
+
 sisteransi@^1.0.5:
   version "1.0.5"
   resolved "https://registry.npmjs.org/sisteransi/-/sisteransi-1.0.5.tgz"

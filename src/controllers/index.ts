@@ -233,8 +233,8 @@ const krakenUpdater = async () => {
                         exchange: 'Kraken',
                         positions: openedPositionsKraken
                 });
-        } catch {
-                logger.warn(`Kraken is not working. Time: ${new Date()}`);
+        } catch(error) {
+                logger.warn(`Kraken is not working. Time: ${new Date()}`, error);
         }
 };
 

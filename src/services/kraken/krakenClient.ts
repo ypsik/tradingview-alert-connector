@@ -27,6 +27,8 @@ export class KrakenClient extends AbstractDexClient {
 		this.client = new ccxt.krakenfutures({
 			apiKey: process.env.KRAKEN_FUTURES_API_KEY,
   			secret: process.env.KRAKEN_FUTURES_API_SECRET,
+  			password: '', // leer lassen, wenn nicht erforderlich
+  			uid: '',      // evtl. Kraken UID nötig bei einigen Konten
 			enableRateLimit: true,
 			});
 
@@ -75,7 +77,7 @@ export class KrakenClient extends AbstractDexClient {
 		const orderParams = await this.buildOrderParams(alertMessage);
 
 		const market = orderParams.market;
-		const type = OrderType.LIMIT;
+		const type = OrderType.LIMIT.toLowerCase();
 		const side = orderParams.side;
 		const mode = process.env.BYBIT_MODE || '';
 		const direction = alertMessage.direction;
