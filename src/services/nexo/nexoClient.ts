@@ -174,7 +174,7 @@ export class NexoClient extends AbstractDexClient {
 					positionAction: positionAction,
 					type: 'market',
 					positionSide: direction,
-					quantity: 0.001.toString()
+					quantity: size.toString()
 				}
 			);
 			
