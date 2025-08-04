@@ -30,6 +30,7 @@ export class BingxClient extends AbstractDexClient {
 			secret: process.env.BINGX_SECRET,
 			enableRateLimit: true
 		});
+		this.client.rateLimit = 300;
 
 		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
 	}
