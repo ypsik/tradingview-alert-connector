@@ -5,6 +5,7 @@ import { CronJob } from 'cron';
 import { MarketData } from '../types';
 import * as fs from 'fs';
 import type { Position } from 'ccxt';
+import * as nexo  from '../../nexo';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
 
@@ -18,6 +19,7 @@ const bybitClient = staticDexRegistry.getDex('bybit');
 const bitgetClient = staticDexRegistry.getDex('bitget');
 const bingxClient = staticDexRegistry.getDex('bingx');
 const krakenClient = staticDexRegistry.getDex('kraken');
+const nexoClient = staticDexRegistry.getDex('nexo');
 
 
 let openedPositionsDydxv4: MarketData[] = [];
@@ -26,6 +28,8 @@ let openedPositionsBybit: Position[] = [];
 let openedPositionsBitget: Position[] = [];
 let openedPositionsBingx: Position[] = [];
 let openedPositionsKraken: Position[] = [];
+let openedPositionsNexo: nexo.Position[] = [];
+
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
@@ -33,6 +37,7 @@ const mutexBybit = new Mutex();
 const mutexBitget = new Mutex();
 const mutexBingx = new Mutex();
 const mutexKraken = new Mutex();
+const mutexNexo = new Mutex()
 
 type SupportedExchanges =
 	| 'Dydxv4'
@@ -40,7 +45,9 @@ type SupportedExchanges =
 	| 'Bybit'
 	| 'Bitget'
 	| 'Bingx'
-	| 'Kraken';
+	| 'Kraken'
+	| 'Nexo';
+
 
 function writeNewEntries({
 	exchange,

@@ -1,4 +1,5 @@
-import * as ccxt from 'ccxt';
+import Client from 'nexo-pro'
+import { Position } from '../../nexo';
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
 import {
 	_sleep,
@@ -11,31 +12,30 @@ import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
 
-export class BybitClient extends AbstractDexClient {
-	private readonly client: ccxt.bybit;
+export class NexoClient extends AbstractDexClient {
+	private readonly client: ReturnType<typeof Client>;
 	private readonly logger: CustomLogger;
 
 	constructor() {
 		super();
 
-		this.logger = new CustomLogger('Bybit');
+		this.logger = new CustomLogger('kraken');
 
-		if (!process.env.BYBIT_API_KEY || !process.env.BYBIT_SECRET) {
+		if (!process.env.NEXO_PUBLIC_KEY || !process.env.NEXO_SECRET_KEY) {
 			this.logger.warn('Credentials are not set as environment variable');
 		}
 
-		this.client = new ccxt.bybit({
-			apiKey: process.env.BYBIT_API_KEY,
-			secret: process.env.BYBIT_SECRET
+		this.client = Client({
+			api_key: process.env.NEXO_PUBLIC_KEY!,
+			api_secret: process.env.NEXO_SECRET_KEY!,
+//			base_url: process.env.NODE_ENV !== 'production' ? 'https://api.sandbox.pro.nexo.com' : undefined,
 		});
-
-		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
 	}
 
 	public async getIsAccountReady(): Promise<boolean> {
 		try {
 			// Fetched balance indicates connected wallet
-			await this.client.fetchBalance();
+			await this.client.getAccountSummary();
 			return true;
 		} catch (e) {
 			return false;
@@ -68,13 +68,13 @@ export class BybitClient extends AbstractDexClient {
 
 	public async placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: ccxt.Position[],
+		openedPositions: Position[],
 		mutex: Mutex
 	) {
 		const orderParams = await this.buildOrderParams(alertMessage);
 
 		const market = orderParams.market;
-		const type = OrderType.LIMIT;
+		const type = OrderType.LIMIT.toLowerCase();
 		const side = orderParams.side;
 		const mode = process.env.BYBIT_MODE || '';
 		const direction = alertMessage.direction;
@@ -96,7 +96,7 @@ export class BybitClient extends AbstractDexClient {
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
-			const position = openedPositions.find((el) => el.symbol === market);
+			const position = openedPositions.find((el) => el.instrument === market);
 
 			if (!position) {
 				this.logger.log('order is ignored because position not exists');
@@ -118,14 +118,14 @@ export class BybitClient extends AbstractDexClient {
 				return;
 			}
 
-			const sum = Math.abs(position.contracts);
+			const sum = Math.abs(position.amount);
 
 			size =
 				orderMode === 'full' || newPositionSize == 0
 					? sum
 					: Math.min(size, sum);
 		} else if (orderMode === 'full' || newPositionSize == 0) {
-			const position = openedPositions.find((el) => el.symbol === market);
+			const position = openedPositions.find((el) => el.instrument === market);
 			if (!position) {
 				if (newPositionSize == 0) {
 					this.logger.log(
@@ -135,10 +135,10 @@ export class BybitClient extends AbstractDexClient {
 				}
 			} else {
 				if (
-					(side === OrderSide.SELL && position.contracts > 0) ||
-					(side === OrderSide.BUY && position.contracts < 0)
+					(side === OrderSide.SELL && position.amount > 0) ||
+					(side === OrderSide.BUY && position.amount < 0)
 				)
-					size = Math.abs(position.contracts);
+					size = Math.abs(position.amount);
 			}
 		}
 
@@ -149,9 +149,9 @@ export class BybitClient extends AbstractDexClient {
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
 		let positionIdx: number;
-		if (direction == null) positionIdx = 0;
-		else if (direction === 'long') positionIdx = 1;
-		else if (direction === 'short') positionIdx = 2;
+		if (direction === 'flat') positionIdx = 0;
+		if (direction === 'long') positionIdx = 1;
+		if (direction === 'short') positionIdx = 2;
 
 		const clientId = this.generateRandomHexString(32);
 		this.logger.log('Client ID: ', clientId);
@@ -163,20 +163,19 @@ export class BybitClient extends AbstractDexClient {
 		// const release = await mutex.acquire();
 
 		try {
-			const result = await this.client.createOrder(
-				market,
-				type,
-				side.toLowerCase(),
-				size,
-				price,
+			
+			const futureSide = side == OrderSide.BUY ? 'long' as const : 'short' as const;
+			const orderType: "market" = (type === "market" ? "market" as const: undefined);			
+			const result = await this.client.placeFuturesOrder(
 				{
-					clientOrderId: clientId,
-					timeInForce,
-					postOnly,
-					reduceOnly,
-					position_idx: positionIdx
+					instrument: market,
+					positionAction: 'open',
+					type: 'market',
+					positionSide: futureSide,
+					quantity: size
 				}
 			);
+			
 			this.logger.log('Transaction Result: ', result);
 			orderId = result.id;
 		} catch (e) {
@@ -192,9 +191,7 @@ export class BybitClient extends AbstractDexClient {
 			// const release = await mutex.acquire();
 
 			try {
-				await this.client.cancelOrder(orderId, market, {
-					clientOrderId: clientId
-				});
+				await this.client.cancelOrder({orderId:  orderId });
 				this.logger.log(`Order ID ${orderId} canceled`);
 			} catch (e) {
 				this.logger.log(e);
@@ -222,18 +219,19 @@ export class BybitClient extends AbstractDexClient {
 		market: string
 	): Promise<boolean> => {
 		try {
-			const order = await this.client.fetchOpenOrder(orderId, market);
+			const order = await this.client.getOrderDetails({ id: orderId } );
 
 			this.logger.log('Order ID: ', order.id);
-
-			return order.status == 'closed';
+			 return parseFloat(order.executedQuantity) >= parseFloat(order.quantity);
+			
 		} catch (e) {
 			this.logger.log(e);
 			return false;
 		}
 	};
 
-	public getOpenedPositions = async (): Promise<ccxt.Position[]> => {
-		return this.client.fetchPositions();
+	public getOpenedPositions = async (): Promise<Position[]> => {
+		const r =  await this.client.getFuturesPosition({ status: 'active' });
+		return r.positions;
 	};
 }

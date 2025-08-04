@@ -4,12 +4,13 @@ import config from 'config';
 import { AlertObject, MarketData, OrderResult } from '../types';
 import { Mutex } from 'async-mutex';
 import { Position } from 'ccxt';
+import * as nexo from '../nexo';
 
 export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;
 	abstract placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: Position[] | MarketData[],
+		openedPositions: Position[] | MarketData[] | nexo.Position[],
 		mutex: Mutex
 	);
 	abstract getOpenedPositions();

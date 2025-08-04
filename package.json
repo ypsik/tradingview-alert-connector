@@ -37,6 +37,7 @@
 		"helmet": "^5.0.2",
 		"js-yaml": "^4.1.0",
 		"lodash": "^4.17.21",
+		"nexo-pro": "^1.2.2",
 		"node-json-db": "^1.4.1",
 		"simple-rate-limiter": "^0.5.0",
 		"typescript": "^5.1.6"

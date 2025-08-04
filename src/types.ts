@@ -18,7 +18,7 @@ export type AlertObject = {
 	slippagePercentage?: string;
 	orderMode?: '' | 'full';
 	newPositionSize: number;
-	direction?: string;
+	direction?: 'long' | 'short';
 	minProfit?: number;
 };
 

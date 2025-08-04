@@ -152,9 +152,9 @@ export class KrakenClient extends AbstractDexClient {
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
 		let positionIdx: number;
-		if (direction === 'flat') positionIdx = 0;
-		if (direction === 'long') positionIdx = 1;
-		if (direction === 'short') positionIdx = 2;
+		if (direction == null) positionIdx = 0;
+		else if (direction === 'long') positionIdx = 1;
+		else if (direction === 'short') positionIdx = 2;
 
 		const clientId = this.generateRandomHexString(32);
 		this.logger.log('Client ID: ', clientId);

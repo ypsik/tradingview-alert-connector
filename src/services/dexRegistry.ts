@@ -3,6 +3,7 @@ import { BingxClient } from './bingx/bingxClient';
 import { BitgetClient } from './bitget/bitgetClient';
 import { BybitClient } from './bybit/bybitClient';
 import { KrakenClient } from './kraken/krakenClient';
+import { NexoClient } from './nexo/nexoClient';
 import { DydxV4Client } from './dydx_v4/dydxV4Client';
 import { HyperLiquidClient } from './hyperliquid/hyperliquidClient';
 
@@ -17,6 +18,7 @@ export class DexRegistry {
 		this.registeredDexs.set('bitget', new BitgetClient());
 		this.registeredDexs.set('bingx', new BingxClient());
 		this.registeredDexs.set('kraken', new KrakenClient());
+		this.registeredDexs.set('nexo', new NexoClient());
 	}
 
 	getDex(dexKey: string): AbstractDexClient {
