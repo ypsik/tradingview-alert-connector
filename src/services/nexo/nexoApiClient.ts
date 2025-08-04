@@ -12,7 +12,8 @@ import {
   FuturesOrder,
 } from '../../nexo';
 
-const BASE_URL = 'https://api.pro.nexo.com/rest';
+const API_VERSION = 'v1';
+const BASE_URL = `https://pro-api.nexo.io/api/${API_VERSION}`;
 
 export default class NexoApiClient {
   private apiKey: string;
@@ -29,15 +30,11 @@ export default class NexoApiClient {
   private getTimestamp(): number {
     return Date.now();
   }
-
-  private signMessage(
-    timestamp: number,
-    method: string,
-    path: string,
-    body = ''
-  ): string {
-    const message = `${timestamp}${method}${path}${body}`;
-    return crypto.createHmac('sha256', this.apiSecret).update(message).digest('hex');
+  
+  private generateSignature(nonce: string): string {
+    const hmac = crypto.createHmac('sha256', this.apiSecret);
+    hmac.update(nonce);
+    return hmac.digest('base64');
   }
 
   private async request<T>(
@@ -47,6 +44,7 @@ export default class NexoApiClient {
     isPrivate = false
   ): Promise<T> {
     const timestamp = this.getTimestamp();
+    const nonce = Date.now().toString(); 
     const url = `${BASE_URL}${path}`;
     const body = data ? JSON.stringify(data) : '';
     const headers: Record<string, string> = {
@@ -54,10 +52,11 @@ export default class NexoApiClient {
     };
 
     if (isPrivate) {
-      const signature = this.signMessage(timestamp, method.toUpperCase(), path, body);
-      headers['Nexo-API-Key'] = this.apiKey;
-      headers['Nexo-Request-Timestamp'] = timestamp.toString();
-      headers['Nexo-Signature'] = signature;
+      const signature = this.generateSignature(nonce);
+      headers['X-API-KEY'] = this.apiKey;
+      headers['X-REQUEST-TIMESTAMP'] = timestamp.toString();
+      headers['X-NONCE'] = nonce;
+      headers['X-SIGNATURE'] = signature;
     }
 
     try {
@@ -146,7 +145,7 @@ export default class NexoApiClient {
   }
 
   async placeFuturesOrder(order: FuturesOrder): Promise<any> {
-    return this.request('post', '/futures/orders', order, true);
+    return this.request('post', '/futures/order', order, true);
   }
 
   async cancelFuturesOrder(orderId: string): Promise<any> {
@@ -159,5 +158,8 @@ export default class NexoApiClient {
 
   async adjustFuturesPositionMargin(data: any): Promise<any> {
     return this.request('post', '/futures/position/margin', data, true);
+  }
+  async getFuturesOrderDetails(orderId: string): Promise<any> {
+    return this.request('get', `/futures/orders/${orderId}`, null, true);
   }
 }

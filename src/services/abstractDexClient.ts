@@ -10,7 +10,7 @@ export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;
 	abstract placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: Position[] | MarketData[] | nexo.Position[],
+		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[],
 		mutex: Mutex
 	);
 	abstract getOpenedPositions();

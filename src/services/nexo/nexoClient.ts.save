@@ -1,5 +1,5 @@
-import nexoApiClient from './nexoApiClient'
-import { FuturesPosition } from '../../nexo';
+import Client from 'nexo-pro';
+import * as dotenv from 'dotenv';
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
 import {
 	_sleep,
@@ -12,30 +12,30 @@ import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
 
-export class NexoClient extends AbstractDexClient {
-	private readonly client: nexoApiClient;
+export class KrakenClient extends AbstractDexClient {
+	private readonly client: ReturnType<typeof Client>;
 	private readonly logger: CustomLogger;
 
 	constructor() {
 		super();
 
-		this.logger = new CustomLogger('nexo');
+		this.logger = new CustomLogger('kraken');
 
-		if (!process.env.NEXO_API_KEY || !process.env.NEXO_API_SECRET) {
+		if (!process.env.KRAKEN_FUTURES_API_KEY || !process.env.KRAKEN_FUTURES_API_SECRET) {
 			this.logger.warn('Credentials are not set as environment variable');
 		}
 
-		this.client = new nexoApiClient(
-			process.env.NEXO_API_KEY!,
-			process.env.NEXO_API_SECRET!
+		this.client = Client({
+			api_key: process.env.NEXO_PUBLIC_KEY!,
+			api_secret: process.env.NEXO_SECRET_KEY!,
 //			base_url: process.env.NODE_ENV !== 'production' ? 'https://api.sandbox.pro.nexo.com' : undefined,
-		);
+		});
 	}
 
 	public async getIsAccountReady(): Promise<boolean> {
 		try {
 			// Fetched balance indicates connected wallet
-			await this.client.getAccountBalances();
+			await this.client.getAccountSummary();
 			return true;
 		} catch (e) {
 			return false;
@@ -54,7 +54,7 @@ export class NexoClient extends AbstractDexClient {
 
 		orderSize = doubleSizeIfReverseOrder(alertMessage, orderSize);
 
-		const market = alertMessage.market;
+		const market = alertMessage.market.replace(/_/g, '-');
 
 		const orderParams: dydxV4OrderParams = {
 			market,
@@ -68,7 +68,7 @@ export class NexoClient extends AbstractDexClient {
 
 	public async placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: FuturesPosition[],
+		openedPositions: ccxt.Position[],
 		mutex: Mutex
 	) {
 		const orderParams = await this.buildOrderParams(alertMessage);
@@ -96,14 +96,14 @@ export class NexoClient extends AbstractDexClient {
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
-			const position = openedPositions.find((el) => el.instrument === market);
+			const position = openedPositions.find((el) => el.symbol === market);
 
 			if (!position) {
 				this.logger.log('order is ignored because position not exists');
 				return;
 			}
 
-			const profit = calculateProfit(orderParams.price, parseFloat(position.entryPrice));
+			const profit = calculateProfit(orderParams.price, position.entryPrice);
 			const minimumProfit =
 				alertMessage.minProfit ??
 				parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
@@ -118,14 +118,14 @@ export class NexoClient extends AbstractDexClient {
 				return;
 			}
 
-			const sum = Math.abs(parseFloat(position.quantity));
+			const sum = Math.abs(position.contracts);
 
 			size =
 				orderMode === 'full' || newPositionSize == 0
 					? sum
 					: Math.min(size, sum);
 		} else if (orderMode === 'full' || newPositionSize == 0) {
-			const position = openedPositions.find((el) => el.instrument === market);
+			const position = openedPositions.find((el) => el.symbol === market);
 			if (!position) {
 				if (newPositionSize == 0) {
 					this.logger.log(
@@ -135,10 +135,10 @@ export class NexoClient extends AbstractDexClient {
 				}
 			} else {
 				if (
-					(side === OrderSide.SELL && parseFloat(position.quantity) > 0) ||
-					(side === OrderSide.BUY && parseFloat(position.quantity) < 0)
+					(side === OrderSide.SELL && position.contracts > 0) ||
+					(side === OrderSide.BUY && position.contracts < 0)
 				)
-					size = Math.abs(parseFloat(position.quantity));
+					size = Math.abs(position.contracts);
 			}
 		}
 
@@ -149,9 +149,9 @@ export class NexoClient extends AbstractDexClient {
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
 		let positionIdx: number;
-		if (direction == null) positionIdx = 0;
-		else if (direction === 'long') positionIdx = 1;
-		else if (direction === 'short') positionIdx = 2;
+		if (direction === 'flat') positionIdx = 0;
+		if (direction === 'long') positionIdx = 1;
+		if (direction === 'short') positionIdx = 2;
 
 		const clientId = this.generateRandomHexString(32);
 		this.logger.log('Client ID: ', clientId);
@@ -163,21 +163,16 @@ export class NexoClient extends AbstractDexClient {
 		// const release = await mutex.acquire();
 
 		try {
-			let positionAction: 'open' | 'close';
-			if(direction === 'long' && side == OrderSide.BUY || direction === 'short' && OrderSide.SELL)
-				positionAction = 'open';
-			else 
-				positionAction = 'close'
 			const result = await this.client.placeFuturesOrder(
 				{
 					instrument: market,
-					positionAction: positionAction,
-					type: 'market',
-					positionSide: direction,
-					quantity: 0.001.toString()
+					positionAction: 'open',
+					type: type,
+					positionSide: side.toLowerCase(),
+					quantity: size,
+					price: price 
 				}
 			);
-			
 			this.logger.log('Transaction Result: ', result);
 			orderId = result.id;
 		} catch (e) {
@@ -186,6 +181,21 @@ export class NexoClient extends AbstractDexClient {
 			// release();
 		}
 
+		await _sleep(fillWaitTime);
+
+		const isFilled = await this.isOrderFilled(orderId, market);
+		if (!isFilled) {
+			// const release = await mutex.acquire();
+
+			try {
+				await this.client.cancelOrder(orderId);
+				this.logger.log(`Order ID ${orderId} canceled`);
+			} catch (e) {
+				this.logger.log(e);
+			} finally {
+				// release();
+			}
+		}
 		const orderResult: OrderResult = {
 			side: orderParams.side,
 			size: orderParams.size,
@@ -206,7 +216,7 @@ export class NexoClient extends AbstractDexClient {
 		market: string
 	): Promise<boolean> => {
 		try {
-			const order = await this.client.getFuturesOrderDetails(orderId);
+			const order = await this.client.getOrderDetails(orderId);
 
 			this.logger.log('Order ID: ', order.id);
 			 return parseFloat(order.executedQuantity) >= parseFloat(order.quantity);
@@ -217,8 +227,8 @@ export class NexoClient extends AbstractDexClient {
 		}
 	};
 
-	public getOpenedPositions = async (): Promise<FuturesPosition[]> => {
-		const r =  await this.client.getFuturesPositions();
-		return r.positions;
+	public getOpenedPositions = async (): Promise<FuturesPositionResponse> => {
+		const r =  await this.client.getFuturesPosition({ status: 'active' });
+		return r;
 	};
 }

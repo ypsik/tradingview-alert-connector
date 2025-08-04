@@ -5,7 +5,7 @@ import { CronJob } from 'cron';
 import { MarketData } from '../types';
 import * as fs from 'fs';
 import type { Position } from 'ccxt';
-import * as nexo  from '../../nexo';
+import * as nexo  from '../nexo';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
 
@@ -28,7 +28,7 @@ let openedPositionsBybit: Position[] = [];
 let openedPositionsBitget: Position[] = [];
 let openedPositionsBingx: Position[] = [];
 let openedPositionsKraken: Position[] = [];
-let openedPositionsNexo: nexo.Position[] = [];
+let openedPositionsNexo: nexo.FuturesPosition[] = [];
 
 
 const mutexDydxv4 = new Mutex();
@@ -54,7 +54,7 @@ function writeNewEntries({
 	positions
 }: {
 	exchange: SupportedExchanges;
-	positions: MarketData[] | Position[];
+	positions: MarketData[] | Position[] | nexo.FuturesPosition[];
 }) {
 	const folderPath = './data/custom/exports/';
 	if (!fs.existsSync(folderPath)) {
@@ -163,6 +163,11 @@ const getExchangeVariables = (exchange: string) => {
                                 openedPositions: openedPositionsKraken,
                                 mutex: mutexKraken
                         };
+		 case 'nexo':
+                        return {
+                                openedPositions: openedPositionsNexo,
+                                mutex: mutexNexo
+                        };
 	}
 };
 
@@ -245,6 +250,20 @@ const krakenUpdater = async () => {
         }
 };
 
+const nexoUpdater = async () => {
+        try {
+                const nexoPositions = await nexoClient.getOpenedPositions();
+                openedPositionsNexo = nexoPositions as unknown as nexo.FuturesPosition[];
+                writeNewEntries({
+                        exchange: 'Nexo',
+                        positions: openedPositionsNexo
+                });
+        } catch(ex) {
+                logger.warn(`Nexo is not working. Time: ${new Date()}`,ex);
+        }
+};
+
+
 CronJob.from({
 	cronTime: process.env.UPDATE_POSITIONS_TIMER || '*/30 * * * * *', // Every 30 seconds
 	onTick: async () => {
@@ -254,7 +273,8 @@ CronJob.from({
 			bybitUpdater(),
 			bitgetUpdater(),
 			bingxUpdater(),
-			krakenUpdater()
+			krakenUpdater(),
+			nexoUpdater()
 		]);
 	},
 	runOnInit: true,
@@ -269,7 +289,7 @@ router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
 	const dexRegistry = new DexRegistry();
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo'];
 	const dexClients = dexNames.map((name) => dexRegistry.getDex(name));
 
 	try {
@@ -283,7 +303,8 @@ router.get('/accounts', async (req, res) => {
 			Bybit: accountStatuses[2], // bybit
 			Bitget: accountStatuses[3], // bitget
 			Bingx: accountStatuses[4], // bingx
-			Kraken: accountStatuses[5] // kraken
+			Kraken: accountStatuses[5], // kraken
+			Nexo: accountStatuses[6] // nexo
 		};
 		res.send(message);
 	} catch (error) {
@@ -325,7 +346,7 @@ router.post('/', async (req, res) => {
 });
 
 // router.get('/debug-sentry', function mainHandler(req, res) {
-// 	throw new Error('My first Sentry error!');
+//	throw new Error('My first Sentry error!');
 // });
 
 export default router;
