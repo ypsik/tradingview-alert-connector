@@ -23,6 +23,7 @@ export class NexoClient extends AbstractDexClient {
 
 		if (!process.env.NEXO_API_KEY || !process.env.NEXO_API_SECRET) {
 			this.logger.warn('Credentials are not set as environment variable');
+			return;
 		}
 
 		this.client = new nexoApiClient(
