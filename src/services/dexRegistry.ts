@@ -6,6 +6,7 @@ import { KrakenClient } from './kraken/krakenClient';
 import { NexoClient } from './nexo/nexoClient';
 import { DydxV4Client } from './dydx_v4/dydxV4Client';
 import { HyperLiquidClient } from './hyperliquid/hyperliquidClient';
+import { DriftClient } from './drift/driftClient';
 
 export class DexRegistry {
 	private registeredDexs: Map<string, AbstractDexClient>;
@@ -18,7 +19,9 @@ export class DexRegistry {
 		this.registeredDexs.set('bitget', new BitgetClient());
 		this.registeredDexs.set('bingx', new BingxClient());
 		this.registeredDexs.set('kraken', new KrakenClient());
+		this.registeredDexs.set('drift', new DriftClient());
 		this.registeredDexs.set('nexo', new NexoClient());
+
 	}
 
 	getDex(dexKey: string): AbstractDexClient {

@@ -5,6 +5,9 @@ import { CronJob } from 'cron';
 import { MarketData } from '../types';
 import * as fs from 'fs';
 import type { Position } from 'ccxt';
+import {
+  PerpPosition
+} from '@drift-labs/sdk';
 import * as nexo  from '../nexo';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
@@ -20,7 +23,7 @@ const bitgetClient = staticDexRegistry.getDex('bitget');
 const bingxClient = staticDexRegistry.getDex('bingx');
 const krakenClient = staticDexRegistry.getDex('kraken');
 const nexoClient = staticDexRegistry.getDex('nexo');
-
+const driftClient = staticDexRegistry.getDex('drift');
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
@@ -29,7 +32,7 @@ let openedPositionsBitget: Position[] = [];
 let openedPositionsBingx: Position[] = [];
 let openedPositionsKraken: Position[] = [];
 let openedPositionsNexo: nexo.FuturesPosition[] = [];
-
+let openedPositionsDrift: PerpPosition[] = [];
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
@@ -37,7 +40,9 @@ const mutexBybit = new Mutex();
 const mutexBitget = new Mutex();
 const mutexBingx = new Mutex();
 const mutexKraken = new Mutex();
-const mutexNexo = new Mutex()
+const mutexNexo = new Mutex();
+const mutexDrift = new Mutex();
+
 
 type SupportedExchanges =
 	| 'Dydxv4'
@@ -46,7 +51,8 @@ type SupportedExchanges =
 	| 'Bitget'
 	| 'Bingx'
 	| 'Kraken'
-	| 'Nexo';
+	| 'Nexo' 
+	| 'Drift';
 
 
 function writeNewEntries({
@@ -54,7 +60,7 @@ function writeNewEntries({
 	positions
 }: {
 	exchange: SupportedExchanges;
-	positions: MarketData[] | Position[] | nexo.FuturesPosition[];
+	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[];
 }) {
 	const folderPath = './data/custom/exports/';
 	if (!fs.existsSync(folderPath)) {
@@ -168,6 +174,12 @@ const getExchangeVariables = (exchange: string) => {
                                 openedPositions: openedPositionsNexo,
                                 mutex: mutexNexo
                         };
+                 case 'drift':
+                        return {
+                                openedPositions: openedPositionsDrift,
+                                mutex: mutexDrift
+                        };
+
 	}
 };
 
@@ -258,8 +270,21 @@ const nexoUpdater = async () => {
                         exchange: 'Nexo',
                         positions: openedPositionsNexo
                 });
+        } catch {
+                logger.warn(`Nexo is not working. Time: ${new Date()}`);
+        }
+};
+
+const driftUpdater = async () => {
+        try {
+                const driftPositions = await driftClient.getOpenedPositions();
+                openedPositionsDrift = driftPositions as unknown as PerpPosition[];
+                writeNewEntries({
+                        exchange: 'Drift',
+                        positions: openedPositionsDrift
+                });
         } catch(ex) {
-                logger.warn(`Nexo is not working. Time: ${new Date()}`,ex);
+                logger.warn(`Drift is not working. Time: ${new Date()}`, ex);
         }
 };
 
@@ -274,7 +299,8 @@ CronJob.from({
 			bitgetUpdater(),
 			bingxUpdater(),
 			krakenUpdater(),
-			nexoUpdater()
+			nexoUpdater(),
+			driftUpdater()
 		]);
 	},
 	runOnInit: true,

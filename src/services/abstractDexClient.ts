@@ -5,12 +5,15 @@ import { AlertObject, MarketData, OrderResult } from '../types';
 import { Mutex } from 'async-mutex';
 import { Position } from 'ccxt';
 import * as nexo from '../nexo';
+import {
+  PerpPosition
+} from '@drift-labs/sdk';
 
 export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;
 	abstract placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[],
+		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | PerpPosition[],
 		mutex: Mutex
 	);
 	abstract getOpenedPositions();
