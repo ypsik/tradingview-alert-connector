@@ -3,7 +3,6 @@ import { Connection, Keypair, PublicKey  } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import { AnchorProvider, Wallet, Program, Idl } from '@coral-xyz/anchor';
 import * as drift from '@drift-labs/sdk';
-import driftIdl from './drift.json';
 
 
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
@@ -56,7 +55,12 @@ export class DriftClient extends AbstractDexClient {
 		try {
 			// Initialize Drift SDK
 			const sdkConfig = drift.initialize({ env: this.env });
-			const connection = new Connection(process.env.DRIFT_RPC_SERVER);
+			const connection = new Connection(process.env.DRIFT_RPC_SERVER, 
+					{
+						wsEndpoint: process.env.DRIFT_RPC_WS,
+						commitment: "confirmed",
+					}
+			);
 			const provider = new AnchorProvider(
 		        connection, this.wallet,
 			        {
@@ -82,6 +86,7 @@ export class DriftClient extends AbstractDexClient {
 //					spotMarketIndexes: [0,5,28],
 					spotMarketIndexes: spotMarketIndexes,
 					subAccountIds: [0],
+					activeSubAccountId: 0,
 					accountSubscription: {
 						type: "websocket",
 						commitment: "confirmed",
