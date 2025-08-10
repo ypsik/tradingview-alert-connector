@@ -55,7 +55,9 @@ export class DriftClient extends AbstractDexClient {
 		try {
 			// Initialize Drift SDK
 			const sdkConfig = drift.initialize({ env: this.env });
-			const connection = new Connection(process.env.DRIFT_RPC_SERVER, 
+			const connection = !process.env.DRIFT_RPC_WS ?                          
+			                new Connection(process.env.DRIFT_RPC_SERVER) :
+					new Connection(process.env.DRIFT_RPC_SERVER, 
 					{
 						wsEndpoint: process.env.DRIFT_RPC_WS,
 						commitment: "confirmed",
