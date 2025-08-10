@@ -185,6 +185,10 @@ const getExchangeVariables = (exchange: string) => {
 
 const dydxv4Updater = async () => {
 	try {
+                if (!process.env.DYDX_V4_MNEMONIC) {
+                        return;
+                }
+
 		const { positions: dydxv4Positions } =
 			await dydxv4Client.getOpenedPositions();
 		openedPositionsDydxv4 = dydxv4Positions as unknown as MarketData[];
@@ -199,6 +203,13 @@ const dydxv4Updater = async () => {
 
 const hyperLiquidUpdater = async () => {
 	try {
+                if (
+                        !process.env.HYPERLIQUID_PRIVATE_KEY ||
+                        !process.env.HYPERLIQUID_WALLET_ADDRESS
+                ) {
+                        return;
+                }
+
 		const hyperliquidPositions = await hyperliquidClient.getOpenedPositions();
 		openedPositionsHyperliquid = hyperliquidPositions as unknown as Position[];
 		writeNewEntries({
@@ -212,6 +223,10 @@ const hyperLiquidUpdater = async () => {
 
 const bybitUpdater = async () => {
 	try {
+                if (!process.env.BYBIT_API_KEY || !process.env.BYBIT_SECRET) {
+                        return;
+                }
+
 		const bybitPositions = await bybitClient.getOpenedPositions();
 		openedPositionsBybit = bybitPositions as unknown as Position[];
 		writeNewEntries({
@@ -225,6 +240,22 @@ const bybitUpdater = async () => {
 
 const bitgetUpdater = async () => {
 	try {
+                if (
+                        !process.env.BITGET_API_KEY ||
+                        !process.env.BITGET_SECRET ||
+                        !process.env.BITGET_API_PASSWORD
+                ) {
+                        return;
+                }
+
+                if (
+                        !process.env.BITGET_API_KEY ||
+                        !process.env.BITGET_SECRET ||
+                        !process.env.BITGET_API_PASSWORD
+                ) {
+                        return;
+                }
+
 		const bitgetPositions = await bitgetClient.getOpenedPositions();
 		openedPositionsBitget = bitgetPositions as unknown as Position[];
 		writeNewEntries({
@@ -238,6 +269,11 @@ const bitgetUpdater = async () => {
 
 const bingxUpdater = async () => {
 	try {
+
+                if (!process.env.BINGX_API_KEY || !process.env.BINGX_SECRET) {
+                        return;
+                }
+
 		const bingxPositions = await bingxClient.getOpenedPositions();
 		openedPositionsBingx = bingxPositions as unknown as Position[];
 		writeNewEntries({
@@ -251,6 +287,10 @@ const bingxUpdater = async () => {
 
 const krakenUpdater = async () => {
         try {
+                if (!process.env.KRAKEN_FUTURES_API_KEY || !process.env.KRAKEN_FUTURES_API_SECRET) {
+                        return;
+                }
+
                 const krakenPositions = await krakenClient.getOpenedPositions();
                 openedPositionsKraken = krakenPositions as unknown as Position[];
                 writeNewEntries({
@@ -264,6 +304,11 @@ const krakenUpdater = async () => {
 
 const nexoUpdater = async () => {
         try {
+		
+                if (!process.env.NEXO_API_KEY || !process.env.NEXO_API_SECRET) {                      
+                        return;
+                }
+
                 const nexoPositions = await nexoClient.getOpenedPositions();
                 openedPositionsNexo = nexoPositions as unknown as nexo.FuturesPosition[];
                 writeNewEntries({
@@ -277,7 +322,14 @@ const nexoUpdater = async () => {
 
 const driftUpdater = async () => {
         try {
-                const driftPositions = await driftClient.getOpenedPositions();
+                if (
+                        !process.env.DRIFT_MNEMONIC || !process.env.DRIFT_RPC_SERVER
+                ) {
+                        return;
+                }
+
+		const driftPositions = await driftClient.getOpenedPositions();
+
                 openedPositionsDrift = driftPositions as unknown as PerpPosition[];
                 writeNewEntries({
                         exchange: 'Drift',
