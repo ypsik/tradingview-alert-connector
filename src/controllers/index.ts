@@ -366,9 +366,8 @@ router.get('/', async (req, res) => {
 router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
-	const dexRegistry = new DexRegistry();
 	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo'];
-	const dexClients = dexNames.map((name) => dexRegistry.getDex(name));
+	const dexClients = dexNames.map((name) => staticDexRegistry.getDex(name));
 
 	try {
 		const accountStatuses = await Promise.all(
@@ -403,7 +402,7 @@ router.post('/', async (req, res) => {
 	// set dydxv3 by default for backwards compatibility
 	const exchange = req.body['exchange']?.toLowerCase() || 'dydxv3';
 
-	const dexClient = new DexRegistry().getDex(exchange);
+	const dexClient = staticDexRegistry.getDex(exchange);
 
 	if (!dexClient) {
 		res.send(`Error. Exchange: ${exchange} is not supported`);

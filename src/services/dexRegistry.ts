@@ -24,9 +24,10 @@ export class DexRegistry {
 
 	}
 
-	getDex(dexKey: string): AbstractDexClient {
+	getDex(dexKey: string): AbstractDexClient | undefined {
 		return this.registeredDexs.get(dexKey);
 	}
+
 
 	getAllDexKeys(): string[] {
 		return Array.from(this.registeredDexs.keys());

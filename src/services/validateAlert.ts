@@ -24,15 +24,6 @@ export const validateAlert = async (
 		return false;
 	}
 
-	// check exchange
-	if (alertMessage.exchange) {
-		const validExchanges = new DexRegistry().getAllDexKeys();
-		if (!validExchanges.includes(alertMessage.exchange)) {
-			console.error('Exchange name must be dydx or perpetual or gmx or dydxv4');
-			return false;
-		}
-	}
-
 	// check strategy name
 	if (!alertMessage.strategy) {
 		console.error('Strategy field of tradingview alert must not be empty');
