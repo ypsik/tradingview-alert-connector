@@ -1,4 +1,3 @@
-import * as ccxt from 'ccxt';
 import { Connection, Keypair, PublicKey  } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import { AnchorProvider, Wallet, Program, Idl } from '@coral-xyz/anchor';
@@ -30,6 +29,7 @@ export class DriftClient extends AbstractDexClient {
 	private readonly env = 'mainnet-beta';
 	private client: drift.DriftClient;
 	private user: drift.User;
+	private subAccountId: number = 0; 
 	private readonly wallet: Wallet;
 	private readonly logger: CustomLogger;	
 	private marketIndexMap: Map<string, drift.PerpMarketAccount> = new Map<string, drift.PerpMarketAccount>();
@@ -81,14 +81,19 @@ export class DriftClient extends AbstractDexClient {
 			const spotMarketIndexes = await this.getUsedSpotMarkets(driftPublicKey, provider);
 			await new Promise(resolve => setTimeout(resolve, 2000)); // 1 Sekunde warten
 
+
+                        const delegateAuthority =  process.env.DRIFT_DELIGATE_ACCOUNT
+                            ? new PublicKey(process.env.DRIFT_DELIGATE_ACCOUNT)
+                            : undefined;
+
 			this.client = new drift.DriftClient({
 			  connection: provider.connection,
 			  wallet: provider.wallet,
 			  programID: driftPublicKey,
 			  perpMarketIndexes: perpMarketIndexes,
 			  spotMarketIndexes: spotMarketIndexes,
-			  subAccountIds: [0],
-			  activeSubAccountId: 0,
+			  subAccountIds: [this.subAccountId],
+			  activeSubAccountId: this.subAccountId,
 			  ...(process.env.DRIFT_RPC_WS
 			    ? {
 			        accountSubscription: {
@@ -98,11 +103,9 @@ export class DriftClient extends AbstractDexClient {
 			      }
 			    : {}),
 			});
-	
-			await this.client.subscribe();
-
-//			const slotSubscriber = new drift.SlotSubscriber(connection);
-//			await slotSubscriber.subscribe();
+			await this.client.subscribe();	
+			await this.client.addUser(this.subAccountId, delegateAuthority);
+			await this.client.switchActiveUser(this.subAccountId, delegateAuthority);
 
 			const myUserSubscriber = new CustomUserAccountSubscriber(
 			    connection,
@@ -110,18 +113,20 @@ export class DriftClient extends AbstractDexClient {
 			    await this.client.getUserAccountPublicKey(),
 			    30_000
 			);
-			this.user = new drift.User({
-                                driftClient: this.client,
-                                userAccountPublicKey: await this.client.getUserAccountPublicKey(),
-				accountSubscription: {
-					type: "custom",
-					userAccountSubscriber: myUserSubscriber
-				},
-                            });
-                        await this.user.subscribe();
+			this.user = this.client.getUser(this.subAccountId, delegateAuthority);
+//			this.user = new drift.User({
+//                                driftClient: this.client,
+//                                userAccountPublicKey: await this.client.getUserAccountPublicKey(),
+//				accountSubscription: {
+//					type: "custom",
+//					userAccountSubscriber: myUserSubscriber
+//				},
+//				authority: delegateAuthority,
+//                                includeDelegates: true,
+//                            });
+//                        await this.user.subscribe();
 
-//			const user = this.client.getUser();
-//			await user.fetchAccounts();
+			await this.user.fetchAccounts();
 
 			const perpMarkets = this.client.getPerpMarketAccounts();
 			const spotMarkets = this.client.getSpotMarketAccounts();
@@ -146,23 +151,29 @@ export class DriftClient extends AbstractDexClient {
                                 1000
                             );
 
+			 
+			const delegateAuthority =  process.env.DRIFT_DELIGATE_ACCOUNT
+			    ? new PublicKey(process.env.DRIFT_DELIGATE_ACCOUNT)
+			    : undefined;
 			const client = new drift.DriftClient(
                                 {
                                         connection: provider.connection,
                                         wallet: provider.wallet,
                                         programID: driftPublicKey,
                                         perpMarketIndexes: [],
-                                        spotMarketIndexes: [],					
-		                        subAccountIds: [0],
-		                        activeSubAccountId: 0,
+                                        spotMarketIndexes: [],
 //                                        accountSubscription: {
 //                                                type: "websocket",
 //                                                commitment: "confirmed",
-//                                        }
+//                                        },
+					authority: delegateAuthority,       
+					includeDelegates: true,  
+					
                                 }
                         );
-			await client.addUser(0);
 			await client.subscribe();
+                        await client.addUser(this.subAccountId, delegateAuthority);                        
+			await client.switchActiveUser(this.subAccountId, delegateAuthority);
 			
 			const myUserSubscriber = new CustomUserAccountSubscriber(
                             provider.connection,
@@ -172,18 +183,19 @@ export class DriftClient extends AbstractDexClient {
                         );
 
                  
-//			const user = client.getUser();
-			const user = new drift.User({
-			        driftClient: client,
-			        userAccountPublicKey: await client.getUserAccountPublicKey(),
-				accountSubscription: {
-                                        type: "custom",
-                                        userAccountSubscriber: myUserSubscriber
-                                },
-			    });
-                        await user.subscribe();
+			const user = client.getUser(this.subAccountId, delegateAuthority);
+//			const user = new drift.User({
+//			        driftClient: client,
+//			        userAccountPublicKey: await client.getUserAccountPublicKey(),
+//				accountSubscription: {
+//                                        type: "custom",
+//                                        userAccountSubscriber: myUserSubscriber
+//                                },
+//			    });
+//                        await user.subscribe();
 			await user.fetchAccounts()
-			const userAccount = user.getUserAccount(); 
+
+			const userAccount  = user.getUserAccount(); 
 
 			for (const pos of userAccount.spotPositions) {
 				const idx = pos.marketIndex;			   
@@ -193,7 +205,7 @@ export class DriftClient extends AbstractDexClient {
 				}
 			}
 		
-		return [...new Set(spotMarketIndexes)];
+			return [...new Set(spotMarketIndexes)];
 		
 	}
 
@@ -248,15 +260,7 @@ export class DriftClient extends AbstractDexClient {
 		openedPositions: drift.PerpPosition[],
 		mutex: Mutex
 	) {
-		await this.readyPromise;
-                
-		this.logger.log(`Anzahl Einträge in marketIndexMap: ${ this.marketIndexMap.size}`);		
-
-                this.marketIndexMap.forEach((market, key) => {
-                          
-  const name = key;
-  this.logger.log(`Parsed market name: "${name}"`);
-});
+		await this.readyPromise;           
 
 		const orderParams = await this.buildOrderParams(alertMessage);
 
@@ -373,7 +377,7 @@ export class DriftClient extends AbstractDexClient {
                           marketIndex: perpMarketAccount.marketIndex,
                           direction: side == OrderSide.SELL ? drift.PositionDirection.SHORT : drift.PositionDirection.LONG,
                           baseAssetAmount: baseAssetAmount,
-                          orderType: drift.OrderType.MARKET,
+                          orderType: drift.OrderType.MARKET
                         };
 		
 			const txSig = await this.client.placePerpOrder(params);
@@ -416,7 +420,7 @@ export class DriftClient extends AbstractDexClient {
 	public getOpenedPositions = async (): Promise<drift.PerpPosition[]> =>
 	{
 		await this.readyPromise;
-		const userAccount = this.user.getUserAccount();
+		const userAccount = this.client.getUserAccount(this.subAccountId);
 		const perpPositions = userAccount.perpPositions;
 		return perpPositions.filter(p => !p.baseAssetAmount.isZero());
 	};
