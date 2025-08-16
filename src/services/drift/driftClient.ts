@@ -203,8 +203,9 @@ export class DriftClient extends AbstractDexClient {
 				if (pos.scaledBalance.gt(new drift.BN(0))) {
 					spotMarketIndexes.push(idx);
 				}
-			}
-		
+			}		
+			spotMarketIndexes.push(0);
+
 			return [...new Set(spotMarketIndexes)];
 		
 	}
