@@ -19,7 +19,7 @@ export class NexoClient extends AbstractDexClient {
 	constructor() {
 		super();
 
-		this.logger = new CustomLogger('nexo');
+		this.logger = new CustomLogger('Nexo');
 
 		if (!process.env.NEXO_API_KEY || !process.env.NEXO_API_SECRET) {
 			this.logger.warn('Credentials are not set as environment variable');

@@ -4,6 +4,7 @@ import config from 'config';
 import { AlertObject, MarketData, OrderResult } from '../types';
 import { Mutex } from 'async-mutex';
 import { Position } from 'ccxt';
+import * as aster from '../aster';
 import * as nexo from '../nexo';
 import {
   PerpPosition
@@ -13,7 +14,7 @@ export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;
 	abstract placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | PerpPosition[],
+		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | aster.Position[] | PerpPosition[],
 		mutex: Mutex
 	);
 	abstract getOpenedPositions();

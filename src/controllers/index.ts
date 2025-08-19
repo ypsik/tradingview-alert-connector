@@ -9,6 +9,7 @@ import {
   PerpPosition
 } from '@drift-labs/sdk';
 import * as nexo  from '../nexo';
+import * as aster  from '../aster';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
 
@@ -24,6 +25,7 @@ const bingxClient = staticDexRegistry.getDex('bingx');
 const krakenClient = staticDexRegistry.getDex('kraken');
 const nexoClient = staticDexRegistry.getDex('nexo');
 const driftClient = staticDexRegistry.getDex('drift');
+const asterClient = staticDexRegistry.getDex('aster');
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
@@ -33,6 +35,8 @@ let openedPositionsBingx: Position[] = [];
 let openedPositionsKraken: Position[] = [];
 let openedPositionsNexo: nexo.FuturesPosition[] = [];
 let openedPositionsDrift: PerpPosition[] = [];
+let openedPositionsAster: aster.Position[] = [];
+
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
@@ -42,7 +46,7 @@ const mutexBingx = new Mutex();
 const mutexKraken = new Mutex();
 const mutexNexo = new Mutex();
 const mutexDrift = new Mutex();
-
+const mutexAster = new Mutex();
 
 type SupportedExchanges =
 	| 'Dydxv4'
@@ -52,6 +56,7 @@ type SupportedExchanges =
 	| 'Bingx'
 	| 'Kraken'
 	| 'Nexo' 
+	| 'Aster'
 	| 'Drift';
 
 
@@ -60,7 +65,7 @@ function writeNewEntries({
 	positions
 }: {
 	exchange: SupportedExchanges;
-	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[];
+	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[] | aster.Position[];
 }) {
 	const folderPath = './data/custom/exports/';
 	if (!fs.existsSync(folderPath)) {
@@ -174,6 +179,11 @@ const getExchangeVariables = (exchange: string) => {
                                 openedPositions: openedPositionsNexo,
                                 mutex: mutexNexo
                         };
+		 case 'aster':
+                        return {
+                                openedPositions: openedPositionsAster,
+                                mutex: mutexAster
+                        };
                  case 'drift':
                         return {
                                 openedPositions: openedPositionsDrift,
@@ -280,8 +290,8 @@ const bingxUpdater = async () => {
 			exchange: 'Bingx',
 			positions: openedPositionsBingx
 		});
-	} catch {
-		logger.warn(`Bingx is not working. Time: ${new Date()}`);
+	} catch(ex) {
+		logger.warn(`Bingx is not working. Time: ${new Date()}`, ex);
 	}
 };
 
@@ -315,8 +325,26 @@ const nexoUpdater = async () => {
                         exchange: 'Nexo',
                         positions: openedPositionsNexo
                 });
-        } catch {
-                logger.warn(`Nexo is not working. Time: ${new Date()}`);
+        } catch(ex) {
+                logger.warn(`Nexo is not working. Time: ${new Date()}`, ex);
+        }
+};
+
+const asterUpdater = async () => {
+        try {
+
+                if (!process.env.ASTER_API_KEY || !process.env.ASTER_API_SECRET) {
+                        return;
+                }
+
+                const asterPositions = await asterClient.getOpenedPositions();
+                openedPositionsAster = asterPositions as unknown as aster.Position[];
+                writeNewEntries({
+                        exchange: 'Aster',
+                        positions: openedPositionsAster
+                });
+        } catch(ex) {
+                logger.warn(`Aster is not working. Time: ${new Date()}`, ex);
         }
 };
 
@@ -352,7 +380,8 @@ CronJob.from({
 			bingxUpdater(),
 			krakenUpdater(),
 			nexoUpdater(),
-			driftUpdater()
+			driftUpdater(),
+			asterUpdater()
 		]);
 	},
 	runOnInit: true,
@@ -366,7 +395,7 @@ router.get('/', async (req, res) => {
 router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster'];
 	const dexClients = dexNames.map((name) => staticDexRegistry.getDex(name));
 
 	try {
@@ -381,7 +410,10 @@ router.get('/accounts', async (req, res) => {
 			Bitget: accountStatuses[3], // bitget
 			Bingx: accountStatuses[4], // bingx
 			Kraken: accountStatuses[5], // kraken
-			Nexo: accountStatuses[6] // nexo
+			Nexo: accountStatuses[6], // nexo
+			Drift: accountStatuses[7], // drift
+			Aster: accountStatuses[8], // aster
+			
 		};
 		res.send(message);
 	} catch (error) {
