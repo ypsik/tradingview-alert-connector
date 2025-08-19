@@ -103,9 +103,12 @@ export class AsterClient {
     const query = new URLSearchParams(params).toString();
     const signature = this.sign(query);
 
-    if (method === "GET") {
+    if (method === "GET" || method === "DELETE") {
       const url = `${endpoint}?${query}&signature=${signature}`;
-      const res = await this.http.get<T>(url);
+      const res = await this.http.request<T>({
+	      method,
+	      url,
+	    });
       return res.data;
     } else {
       // POST → Parameter im Body als form-data senden

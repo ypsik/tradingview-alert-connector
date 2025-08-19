@@ -100,7 +100,6 @@ export class AsterClient extends AbstractDexClient {
 			(side === OrderSide.BUY && direction === 'short')
 		) {
 			const position = openedPositions.find((el) => el.symbol === market);
-			side = side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
 
 			if (!position) {
 				this.logger.log('order is ignored because position not exists');
@@ -173,6 +172,13 @@ export class AsterClient extends AbstractDexClient {
 			else 
 				positionAction = 'close'
 			const positionSide = direction === 'long' ? 'LONG' : 'SHORT';
+
+                        if(direction === 'long' && side == OrderSide.BUY || direction === 'short' && OrderSide.SELL)
+                                side = OrderSide.BUY;
+                        else
+                                side = OrderSide.SELL;
+
+
 			const result = await this.client.placeOrder(
 				{
 					symbol: market,
@@ -199,7 +205,7 @@ export class AsterClient extends AbstractDexClient {
                         // const release = await mutex.acquire();
 
                         try {
-                                await this.client.cancelOrder(orderId, market);
+                                await this.client.cancelOrder(market, orderId);
                                 this.logger.log(`Order ID ${orderId} canceled`);
                         } catch (e) {
                                 this.logger.log(e);
