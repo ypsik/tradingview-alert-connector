@@ -36,9 +36,13 @@ export class AsterClient extends AbstractDexClient {
 
 	public async getIsAccountReady(): Promise<boolean> {
 		try {
-			// Fetched balance indicates connected wallet
-			await this.client.getAccountBalances();
-			return true;
+			if (client)
+			{
+				// Fetched balance indicates connected wallet
+				await this.client.getAccountBalances();
+				return true;
+			}
+			return false;
 		} catch (e) {
 			this.logger.error("getIsAccountReady error:", e);
 			return false;
