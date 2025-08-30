@@ -11,10 +11,6 @@ const ADDRESS_PROVIDER = process.env.MARS_ADDRESS_PROVIDER!;
 const FEE_DENOM = process.env.FEE_DENOM ?? "untrn";
 const GAS_PRICE = process.env.GAS_PRICE ?? `0.025${FEE_DENOM}`;
 
-if (!CHAIN_ID || !ADDRESS_PROVIDER) {
-  throw new Error("Missing required .env variables. Please set NEUTRON_RPC, NEUTRON_CHAIN_ID, NEUTRON_MNEMONIC and ADDRESS_PROVIDER");
-}
-
 // ---------------- Types ----------------
 type Decimal = string;
 type Int128 = string;
