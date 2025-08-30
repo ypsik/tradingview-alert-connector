@@ -268,14 +268,13 @@ export class DriftClient extends AbstractDexClient {
 		const market = orderParams.market;
 		const type = OrderType.LIMIT;
 		const side = orderParams.side;
-		const mode = process.env.HYPERLIQUID_MODE || '';
+		const mode = process.env.DRIFT_MODE || '';
 		const direction = alertMessage.direction;
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
 
 		const timeInForce = 'gtc';
 		const slippagePercentage = parseFloat(alertMessage.slippagePercentage); // Get from alert
-		const vaultAddress = process.env.HYPERLIQUID_VAULT_ADDRESS;
 		const orderMode = alertMessage.orderMode || '';
 		const newPositionSize = alertMessage.newPositionSize;
 		const price =

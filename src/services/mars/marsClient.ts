@@ -1,44 +1,69 @@
-import * as ccxt from 'ccxt';
+import { Connection, Keypair, PublicKey  } from '@solana/web3.js';
+import * as anchor from '@coral-xyz/anchor';
+import { AnchorProvider, Wallet, Program, Idl } from '@coral-xyz/anchor';
+import * as drift from '@drift-labs/sdk';
+
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
 import {
-	_sleep,
-	calculateProfit,
-	doubleSizeIfReverseOrder
+        _sleep,
+        calculateProfit,
+        doubleSizeIfReverseOrder
 } from '../../helper';
 import 'dotenv/config';
 import { OrderSide, OrderType } from '@dydxprotocol/v4-client-js';
 import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
+import * as bip39 from 'bip39';
+import { derivePath } from 'ed25519-hd-key';
 
-export class KrakenClient extends AbstractDexClient {
-	private readonly client: ccxt.krakenfutures;
-	private readonly logger: CustomLogger;
+import { OpenPosition } from '../../mars';
 
+import marsPerpsClient from './marsPerpsClient'
+
+interface ExtractedTriggerOrder {
+  order_id: string;
+  denom: string;
+  size: string;
+  price: string;
+  direction: "long" | "short";
+}
+
+export class MarsClient extends AbstractDexClient {
+	private client: marsPerpsClient; 
+	private account_id: string;
+	private readonly logger: CustomLogger;	
+	private readyPromise: Promise<void>;
 	constructor() {
 		super();
 
-		this.logger = new CustomLogger('Kraken');
+		this.logger = new CustomLogger('Mars');
 
-		if (!process.env.KRAKEN_FUTURES_API_KEY || !process.env.KRAKEN_FUTURES_API_SECRET) {
-			this.logger.warn('Credentials are not set as environment variable');
+		if (
+			!process.env.MARS_MNEMONIC || !process.env.MARS_RPC_SERVER
+		) {
+			this.logger.warn('Credentials are not set as environment variable'); 
+			return;
 		}
+		
+		this.client = new marsPerpsClient(process.env.MARS_RPC_SERVER, process.env.MARS_MNEMONIC);
+		this.account_id = process.env.MARS_ACCOUNT_ID;
+		this.readyPromise = this.init();
+	}              
 
-		this.client = new ccxt.krakenfutures({
-			apiKey: process.env.KRAKEN_FUTURES_API_KEY,
-			secret: process.env.KRAKEN_FUTURES_API_SECRET,
-			password: '', // leer lassen, wenn nicht erforderlich
-			uid: '',      // evtl. Kraken UID nötig bei einigen Konten
-			enableRateLimit: true,
-			});
-
-		if (process.env.NODE_ENV !== 'production') this.client.setSandboxMode(true);
+	private async init()
+	{
+		await this.client.init();
+		if(!this.account_id)
+			this.account_id = await this.client.ensureAccount();
 	}
 
+
 	public async getIsAccountReady(): Promise<boolean> {
+		await this.readyPromise;
 		try {
 			// Fetched balance indicates connected wallet
-			await this.client.fetchBalance();
+			await this.client.getBalance(this.client.getAddress());
 			return true;
 		} catch (e) {
 			return false;
@@ -57,7 +82,7 @@ export class KrakenClient extends AbstractDexClient {
 
 		orderSize = doubleSizeIfReverseOrder(alertMessage, orderSize);
 
-		const market = alertMessage.market.replace(/_/g, '-');
+		const market = alertMessage.market;
 
 		const orderParams: dydxV4OrderParams = {
 			market,
@@ -71,21 +96,24 @@ export class KrakenClient extends AbstractDexClient {
 
 	public async placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: ccxt.Position[],
+		openedPositions: OpenPosition[],
 		mutex: Mutex
 	) {
+		await this.readyPromise;           
+
 		const orderParams = await this.buildOrderParams(alertMessage);
 
 		const market = orderParams.market;
-		const type = OrderType.LIMIT.toLowerCase();
+		const type = OrderType.LIMIT;
 		const side = orderParams.side;
-		const mode = process.env.BYBIT_MODE || '';
+		const mode = process.env.MARS_MODE || '';
 		const direction = alertMessage.direction;
 
 		if (side === OrderSide.BUY && mode.toLowerCase() === 'onlysell') return;
 
 		const timeInForce = 'gtc';
 		const slippagePercentage = parseFloat(alertMessage.slippagePercentage); // Get from alert
+		const vaultAddress = process.env.HYPERLIQUID_VAULT_ADDRESS;
 		const orderMode = alertMessage.orderMode || '';
 		const newPositionSize = alertMessage.newPositionSize;
 		const price =
@@ -99,14 +127,16 @@ export class KrakenClient extends AbstractDexClient {
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
-			const position = openedPositions.find((el) => el.symbol === market);
+			// Drift  group all positions in one position per symbol
+			const position = openedPositions.find((el) =>  el.market === market);
 
 			if (!position) {
 				this.logger.log('order is ignored because position not exists');
 				return;
 			}
+			
+			const profit = calculateProfit(orderParams.price, parseFloat(position.entry_price));
 
-			const profit = calculateProfit(orderParams.price, position.entryPrice);
 			const minimumProfit =
 				alertMessage.minProfit ??
 				parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
@@ -121,14 +151,15 @@ export class KrakenClient extends AbstractDexClient {
 				return;
 			}
 
-			const sum = Math.abs(position.contracts);
+			const sum = position.size;
 
 			size =
 				orderMode === 'full' || newPositionSize == 0
 					? sum
 					: Math.min(size, sum);
 		} else if (orderMode === 'full' || newPositionSize == 0) {
-			const position = openedPositions.find((el) => el.symbol === market);
+			const position = openedPositions.find((el) => el.market === market);
+
 			if (!position) {
 				if (newPositionSize == 0) {
 					this.logger.log(
@@ -138,10 +169,10 @@ export class KrakenClient extends AbstractDexClient {
 				}
 			} else {
 				if (
-					(side === OrderSide.SELL && position.contracts > 0) ||
-					(side === OrderSide.BUY && position.contracts < 0)
+					(side === OrderSide.SELL &&  position.side === 'long') ||
+					(side === OrderSide.BUY && position.side === 'short')
 				)
-					size = Math.abs(position.contracts);
+					size = position.size;
 			}
 		}
 
@@ -151,11 +182,6 @@ export class KrakenClient extends AbstractDexClient {
 		const fillWaitTime =
 			parseInt(process.env.FILL_WAIT_TIME_SECONDS) * 1000 || 300 * 1000; // 5 minutes by default
 
-		let positionIdx: number;
-		if (direction == null) positionIdx = 0;
-		else if (direction === 'long') positionIdx = 1;
-		else if (direction === 'short') positionIdx = 2;
-
 		const clientId = this.generateRandomHexString(32);
 		this.logger.log('Client ID: ', clientId);
 
@@ -163,52 +189,28 @@ export class KrakenClient extends AbstractDexClient {
 		let orderId: string;
 
 		// This solution fixes problem of two parallel calls in exchange, which is not possible
-		// const release = await mutex.acquire();
+		//		const release = await mutex.acquire();
 
-		try {
-			const result = await this.client.createOrder(
-				market,
-				type,
-				side.toLowerCase(),
-				size,
-				price,
-				{
-					clientOrderId: clientId,
-					timeInForce,
-					postOnly,
-					reduceOnly,
-					position_idx: positionIdx
-				}
-			);
-			this.logger.log('Transaction Result: ', result);
-			orderId = result.id;
+		
+		try {				
+                        await this.client.placeMarketOrder( {
+			  accountId: this.account_id,          
+			  denom: market,       
+			  size: size,         
+			  direction: side === OrderSide.BUY ? 'long' : 'short' , 
+			  reduceOnly: reduceOnly,
+			});
+			this.logger.log('Transaction sent');
 		} catch (e) {
-			console.error(e);
+			this.logger.error(e);
 		} finally {
-			// release();
+			//			release();
 		}
-
-		await _sleep(fillWaitTime);
-
-		const isFilled = await this.isOrderFilled(orderId, market);
-		if (!isFilled) {
-			// const release = await mutex.acquire();
-
-			try {
-				await this.client.cancelOrder(orderId, market, {
-					clientOrderId: clientId
-				});
-				this.logger.log(`Order ID ${orderId} canceled`);
-			} catch (e) {
-				this.logger.log(e);
-			} finally {
-				// release();
-			}
-		}
+		
 		const orderResult: OrderResult = {
 			side: orderParams.side,
 			size: orderParams.size,
-			orderId: String(clientId)
+			orderId: undefined
 		};
 
 		return orderResult;
@@ -220,28 +222,28 @@ export class KrakenClient extends AbstractDexClient {
 			.join('')}`;
 	}
 
-	private isOrderFilled = async (
-		orderId: string,
-		market: string
-	): Promise<boolean> => {
-		try {
-			const order = await this.client.fetchOrder(orderId, market);
+	private parseTriggerOrder(order: any): ExtractedTriggerOrder | null {
+	  // execute_perp_order finden
+	  const execAction = order.actions.find(a => 'execute_perp_order' in a)?.execute_perp_order;
+	  if (!execAction) return null;
 
-			this.logger.log('Order ID: ', order.id);
+	  // oracle_price condition finden
+	  const priceCondition = order.conditions.find(c => 'oracle_price' in c)?.oracle_price;
+	  if (!priceCondition) return null;
 
-			const isClosed = order.status === 'closed' || order.status === 'filled';
-    			const filledEnough =
-      			order.filled && order.amount && order.filled >= order.amount * 0.999;
+	  return {
+	    order_id: order.order_id,
+	    denom: execAction.denom,
+	    size: execAction.order_size,
+	    price: priceCondition.price,
+	    direction: priceCondition.comparison === "less_than" ? "long" : "short"
+	  };
+	}
 
-    			return isClosed && filledEnough;
-			
-		} catch (e) {
-			this.logger.log(e);
-			return false;
-		}
-	};
-
-	public getOpenedPositions = async (): Promise<ccxt.Position[]> => {
-		return this.client.fetchPositions();
+	public getOpenedPositions = async (): Promise<OpenPosition[]> =>
+	{
+		await this.readyPromise;
+		const result = await this.client.getOpenPositions(this.account_id);
+		return result.positions;
 	};
 }

@@ -10,6 +10,7 @@ import {
 } from '@drift-labs/sdk';
 import * as nexo  from '../nexo';
 import * as aster  from '../aster';
+import * as mars  from '../mars';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
 
@@ -26,6 +27,7 @@ const krakenClient = staticDexRegistry.getDex('kraken');
 const nexoClient = staticDexRegistry.getDex('nexo');
 const driftClient = staticDexRegistry.getDex('drift');
 const asterClient = staticDexRegistry.getDex('aster');
+const marsClient = staticDexRegistry.getDex('mars');
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
@@ -36,7 +38,7 @@ let openedPositionsKraken: Position[] = [];
 let openedPositionsNexo: nexo.FuturesPosition[] = [];
 let openedPositionsDrift: PerpPosition[] = [];
 let openedPositionsAster: aster.Position[] = [];
-
+let openedPositionsMars: mars.OpenPosition[] = [];
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
@@ -47,6 +49,7 @@ const mutexKraken = new Mutex();
 const mutexNexo = new Mutex();
 const mutexDrift = new Mutex();
 const mutexAster = new Mutex();
+const mutexMars = new Mutex();
 
 type SupportedExchanges =
 	| 'Dydxv4'
@@ -57,7 +60,9 @@ type SupportedExchanges =
 	| 'Kraken'
 	| 'Nexo' 
 	| 'Aster'
-	| 'Drift';
+	| 'Drift'
+	| 'Mars';
+
 
 
 function writeNewEntries({
@@ -65,7 +70,7 @@ function writeNewEntries({
 	positions
 }: {
 	exchange: SupportedExchanges;
-	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[] | aster.Position[];
+	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[] | aster.Position[] | mars.OpenPosition[];
 }) {
 	const folderPath = './data/custom/exports/';
 	if (!fs.existsSync(folderPath)) {
@@ -188,6 +193,11 @@ const getExchangeVariables = (exchange: string) => {
                         return {
                                 openedPositions: openedPositionsDrift,
                                 mutex: mutexDrift
+                        };
+                 case 'mars':
+                        return {
+                                openedPositions: openedPositionsMars,
+                                mutex: mutexMars
                         };
 
 	}
@@ -368,6 +378,26 @@ const driftUpdater = async () => {
         }
 };
 
+const marsUpdater = async () => {
+        try {
+                if (
+                        !process.env.MARS_MNEMONIC || !process.env.MARS_RPC_SERVER
+                ) {
+                        return;
+                }
+
+                const marsPositions = await marsClient.getOpenedPositions();
+
+                openedPositionsMars = marsPositions as unknown as mars.OpenPosition[];
+                writeNewEntries({
+                        exchange: 'Mars',
+                        positions: openedPositionsMars
+                });
+        } catch(ex) {
+                logger.warn(`Mars is not working. Time: ${new Date()}`, ex);
+        }
+};
+
 
 CronJob.from({
 	cronTime: process.env.UPDATE_POSITIONS_TIMER || '*/30 * * * * *', // Every 30 seconds
@@ -381,7 +411,8 @@ CronJob.from({
 			krakenUpdater(),
 			nexoUpdater(),
 			driftUpdater(),
-			asterUpdater()
+			asterUpdater(),
+			marsUpdater()
 		]);
 	},
 	runOnInit: true,
@@ -395,7 +426,7 @@ router.get('/', async (req, res) => {
 router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars'];
 	const dexClients = dexNames.map((name) => staticDexRegistry.getDex(name));
 
 	try {
@@ -413,6 +444,7 @@ router.get('/accounts', async (req, res) => {
 			Nexo: accountStatuses[6], // nexo
 			Drift: accountStatuses[7], // drift
 			Aster: accountStatuses[8], // aster
+			Mars: accountStatuses[9], // mars
 			
 		};
 		res.send(message);

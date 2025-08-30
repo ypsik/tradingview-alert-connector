@@ -6,6 +6,8 @@ import { Mutex } from 'async-mutex';
 import { Position } from 'ccxt';
 import * as aster from '../aster';
 import * as nexo from '../nexo';
+import * as mars from '../mars';
+
 import {
   PerpPosition
 } from '@drift-labs/sdk';
@@ -14,7 +16,7 @@ export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;
 	abstract placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | aster.Position[] | PerpPosition[],
+		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | aster.Position[] | mars.OpenPosition[] | PerpPosition[],
 		mutex: Mutex
 	);
 	abstract getOpenedPositions();
