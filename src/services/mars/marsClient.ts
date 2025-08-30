@@ -1,8 +1,3 @@
-import { Connection, Keypair, PublicKey  } from '@solana/web3.js';
-import * as anchor from '@coral-xyz/anchor';
-import { AnchorProvider, Wallet, Program, Idl } from '@coral-xyz/anchor';
-import * as drift from '@drift-labs/sdk';
-
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
 import {
         _sleep,
@@ -14,11 +9,8 @@ import { OrderSide, OrderType } from '@dydxprotocol/v4-client-js';
 import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
-import * as bip39 from 'bip39';
-import { derivePath } from 'ed25519-hd-key';
 
 import { OpenPosition } from '../../mars';
-
 import marsPerpsClient from './marsPerpsClient'
 
 interface ExtractedTriggerOrder {
