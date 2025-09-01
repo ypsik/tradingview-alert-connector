@@ -7,6 +7,7 @@ import { NexoClient } from './nexo/nexoClient';
 import { AsterClient } from './aster/asterClient';
 import { DydxV4Client } from './dydx_v4/dydxV4Client';
 import { HyperLiquidClient } from './hyperliquid/hyperliquidClient';
+import { ApexClient } from './apex/apexClient';
 import { DriftClient } from './drift/driftClient';
 import { MarsClient } from './mars/marsClient';
 
@@ -25,6 +26,7 @@ export class DexRegistry {
 		this.registeredDexs.set('nexo', new NexoClient());
 		this.registeredDexs.set('aster', new AsterClient());
 		this.registeredDexs.set('mars', new MarsClient());
+		this.registeredDexs.set('apex', new ApexClient());
 	}
 
 	getDex(dexKey: string): AbstractDexClient | undefined {

@@ -28,6 +28,8 @@ const nexoClient = staticDexRegistry.getDex('nexo');
 const driftClient = staticDexRegistry.getDex('drift');
 const asterClient = staticDexRegistry.getDex('aster');
 const marsClient = staticDexRegistry.getDex('mars');
+const apexClient = staticDexRegistry.getDex('apex');
+
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
@@ -39,6 +41,8 @@ let openedPositionsNexo: nexo.FuturesPosition[] = [];
 let openedPositionsDrift: PerpPosition[] = [];
 let openedPositionsAster: aster.Position[] = [];
 let openedPositionsMars: mars.OpenPosition[] = [];
+let openedPositionsApex: Position[] = [];
+
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
@@ -50,6 +54,8 @@ const mutexNexo = new Mutex();
 const mutexDrift = new Mutex();
 const mutexAster = new Mutex();
 const mutexMars = new Mutex();
+const mutexApex = new Mutex();
+
 
 type SupportedExchanges =
 	| 'Dydxv4'
@@ -61,8 +67,8 @@ type SupportedExchanges =
 	| 'Nexo' 
 	| 'Aster'
 	| 'Drift'
-	| 'Mars';
-
+	| 'Mars'
+	| 'Apex';
 
 
 function writeNewEntries({
@@ -198,6 +204,11 @@ const getExchangeVariables = (exchange: string) => {
                         return {
                                 openedPositions: openedPositionsMars,
                                 mutex: mutexMars
+			};
+                 case 'apex':
+                        return {
+                                openedPositions: openedPositionsApex,
+                                mutex: mutexApex                       
                         };
 
 	}
@@ -241,6 +252,28 @@ const hyperLiquidUpdater = async () => {
 	}
 };
 
+const apexUpdater = async () => {
+        try {
+		if (
+                        !process.env.APEX_API_KEY ||
+                        !process.env.APEX_API_SECRET ||
+                        !process.env.APEX_API_PASSWORD ||
+                        !process.env.APEX_OMNI_KEY_SEED
+                ) {
+                        return;
+                }
+
+                const apexPositions = await apexClient.getOpenedPositions();
+                openedPositionsApex = apexPositions as unknown as Position[];
+                writeNewEntries({
+                        exchange: 'Apex',
+                        positions: openedPositionsApex
+                });
+        } catch {
+                logger.warn(`Apex is not working. Time: ${new Date()}`);
+        }
+};
+
 const bybitUpdater = async () => {
 	try {
                 if (!process.env.BYBIT_API_KEY || !process.env.BYBIT_SECRET) {
@@ -260,14 +293,6 @@ const bybitUpdater = async () => {
 
 const bitgetUpdater = async () => {
 	try {
-                if (
-                        !process.env.BITGET_API_KEY ||
-                        !process.env.BITGET_SECRET ||
-                        !process.env.BITGET_API_PASSWORD
-                ) {
-                        return;
-                }
-
                 if (
                         !process.env.BITGET_API_KEY ||
                         !process.env.BITGET_SECRET ||
@@ -412,7 +437,8 @@ CronJob.from({
 			nexoUpdater(),
 			driftUpdater(),
 			asterUpdater(),
-			marsUpdater()
+			marsUpdater(),
+			apexUpdater()
 		]);
 	},
 	runOnInit: true,
@@ -426,7 +452,7 @@ router.get('/', async (req, res) => {
 router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars', 'apex'];
 	const dexClients = dexNames.map((name) => staticDexRegistry.getDex(name));
 
 	try {
@@ -445,6 +471,7 @@ router.get('/accounts', async (req, res) => {
 			Drift: accountStatuses[7], // drift
 			Aster: accountStatuses[8], // aster
 			Mars: accountStatuses[9], // mars
+			Apex: accountStatuses[10], // apex
 			
 		};
 		res.send(message);
