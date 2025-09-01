@@ -231,6 +231,7 @@ export class marsPerpsClient {
     // 3️⃣ Long/Short: long = positive, short = negative
     const orderSizeInt128 = params.direction === "long" ? sizeInt128 : `-${sizeInt128}`;
 
+    const usdcDenom = "ibc/B559A80D62249C8AA07A380E2A2BEA6E5CA9A6F079C912C3A9E9B494105E4F81";
     const msg = {
       update_credit_account: {
         account_id: params.accountId,
@@ -242,6 +243,9 @@ export class marsPerpsClient {
               reduce_only: params.reduceOnly ?? null,
             },
           },
+	  {
+           lend: { denom: usdcDenom, amount: "account_balance" },
+          },      
         ] as Action[],
       },
     };
