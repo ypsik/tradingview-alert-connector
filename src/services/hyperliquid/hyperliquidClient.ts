@@ -187,24 +187,26 @@ export class HyperLiquidClient extends AbstractDexClient {
 
 		await _sleep(fillWaitTime);
 
-		const isFilled = await this.isOrderFilled(orderId, market, {
-			...(vaultAddress && { user: vaultAddress })
-		});
-		if (!isFilled) {
-			const release = await mutex.acquire();
+		setTimeout(async () => {
+			const isFilled = await this.isOrderFilled(orderId, market, {
+				...(vaultAddress && { user: vaultAddress })
+			});
+			if (!isFilled) {
+				const release = await mutex.acquire();
 
-			try {
-				await this.client.cancelOrder(orderId, market, {
-					clientOrderId: clientId,
-					...(vaultAddress && { vaultAddress })
-				});
-				this.logger.log(`Order ID ${orderId} canceled`);
-			} catch (e) {
-				this.logger.log(e);
-			} finally {
-				release();
+				try {
+					await this.client.cancelOrder(orderId, market, {
+						clientOrderId: clientId,
+						...(vaultAddress && { vaultAddress })
+					});
+					this.logger.log(`Order ID ${orderId} canceled`);
+				} catch (e) {
+					this.logger.log(e);
+				} finally {
+					release();
+				}
 			}
-		}
+		}, fillWaitTime);
 		const orderResult: OrderResult = {
 			side: orderParams.side,
 			size: orderParams.size,

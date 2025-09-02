@@ -201,22 +201,23 @@ export class AsterClient extends AbstractDexClient {
 		} finally {
 			// release();
 		}
+               
+		setTimeout(async () => {
 
-                await _sleep(fillWaitTime);
-
-                const isFilled = await this.isOrderFilled(orderId, market);
-                if (!isFilled) {
-                        // const release = await mutex.acquire();
-
-                        try {
-                                await this.client.cancelOrder(market, orderId);
-                                this.logger.log(`Order ID ${orderId} canceled`);
-                        } catch (e) {
-                                this.logger.log(e);
-                        } finally {
-                                // release();
-			}
-		}                   
+	                const isFilled = await this.isOrderFilled(orderId, market);
+	                if (!isFilled) {
+	                        // const release = await mutex.acquire();
+	
+	                        try {
+	                                await this.client.cancelOrder(market, orderId);
+	                                this.logger.log(`Order ID ${orderId} canceled`);
+	                        } catch (e) {
+	                                this.logger.log(e);
+	                        } finally {
+	                                // release();
+				}
+			}                   
+		}, fillWaitTime);
 
 		const orderResult: OrderResult = {
 			side: orderParams.side,
