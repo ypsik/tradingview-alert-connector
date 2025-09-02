@@ -211,11 +211,11 @@ export class DydxV4Client extends AbstractDexClient {
 			orderId: String(clientId)
 		};
 		// await this.exportOrder(
-		// 	'DydxV4',
-		// 	alertMessage.strategy,
-		// 	orderResult,
-		// 	alertMessage.price,
-		// 	alertMessage.market
+		//	'DydxV4',
+		//	alertMessage.strategy,
+		//	orderResult,
+		//	alertMessage.price,
+		//	alertMessage.market
 		// );
 
 		return orderResult;
