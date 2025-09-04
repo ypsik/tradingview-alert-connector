@@ -3,8 +3,10 @@ dotenv.config();
 
 import { DirectSecp256k1HdWallet, type OfflineSigner } from "@cosmjs/proto-signing";
 import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
-import { GasPrice } from "@cosmjs/stargate";
+import { GasPrice, calculateFee } from "@cosmjs/stargate";
 import { PositionsByAccountResponse, OpenPosition } from "../../mars";
+import { EncodeObject } from "@cosmjs/proto-signing";
+import { MsgExecuteContract } from "cosmjs-types/cosmwasm/wasm/v1/tx";
 
 const CHAIN_ID = process.env.NEUTRON_CHAIN_ID!;
 const ADDRESS_PROVIDER = process.env.MARS_ADDRESS_PROVIDER!;
@@ -60,6 +62,7 @@ export class marsPerpsClient {
   private creditManagerAddr!: string;
   private perpsAddr!: string;
   private marketDecimalsCache: Record<string, number> = {};  
+  private lastGasUsed: number | null = null;
 
   constructor(
     private readonly rpc: string,
@@ -232,16 +235,19 @@ export class marsPerpsClient {
     const orderSizeInt128 = params.direction === "long" ? sizeInt128 : `-${sizeInt128}`;
 
     const usdcDenom = "ibc/B559A80D62249C8AA07A380E2A2BEA6E5CA9A6F079C912C3A9E9B494105E4F81";
+    const order: any = {
+      denom: params.denom,
+      order_size: orderSizeInt128,
+    };
+    if (params.reduceOnly !== undefined) {
+      order.reduce_only = params.reduceOnly;
+    }
     const msg = {
       update_credit_account: {
         account_id: params.accountId,
         actions: [
           {
-            execute_perp_order: {
-              denom: params.denom,
-              order_size: orderSizeInt128,
-              reduce_only: params.reduceOnly ?? null,
-            },
+            execute_perp_order: order,
           },
 	  {
            lend: { denom: usdcDenom, amount: "account_balance" },
@@ -250,7 +256,43 @@ export class marsPerpsClient {
       },
     };
 
-    return this.signingClient.execute(this.sender, this.creditManagerAddr, msg, "auto");
+    const execMsg: EncodeObject = {
+      typeUrl: "/cosmwasm.wasm.v1.MsgExecuteContract",
+      value: MsgExecuteContract.fromPartial({
+        sender: this.sender,
+        contract: this.creditManagerAddr,
+        msg: new TextEncoder().encode(JSON.stringify(msg)),
+        funds: [],
+      }),
+    };
+    let fee;
+    try {
+      const gas = await this.signingClient.simulate(this.sender, [execMsg], "");
+      fee = calculateFee(
+        Math.floor(gas * 1.3),
+        GasPrice.fromString("0.025untrn")
+      );
+      this.lastGasUsed = gas;
+    } catch (err) {
+
+      console.warn("[Mars] Simulation failed, use fallback fee:", err.message);
+
+      // Fallback Fee
+      const fallbackGas = this.lastGasUsed
+        ? Math.floor(this.lastGasUsed * 1.3)
+        : 10_000_000; // Default 10M
+
+      fee = {
+        amount: [{ denom: "untrn", amount: "25000" }],
+        gas: fallbackGas.toString(),
+      };
+    }
+
+    return await this.signingClient.signAndBroadcast(
+      this.sender,
+      [execMsg],
+      fee
+    );
   }
 
 

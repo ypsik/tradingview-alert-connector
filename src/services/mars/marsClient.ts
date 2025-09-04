@@ -185,7 +185,7 @@ export class MarsClient extends AbstractDexClient {
 
 		
 		try {				
-                        await this.client.placeMarketOrder( {
+                        const result = await this.client.placeMarketOrder( {
 			  accountId: this.account_id,          
 			  denom: market,       
 			  size: size,         
@@ -193,6 +193,11 @@ export class MarsClient extends AbstractDexClient {
 			  reduceOnly: reduceOnly,
 			});
 			this.logger.log('Transaction sent');
+			const resultSafe = JSON.parse(JSON.stringify(result, (_, v) =>
+				  typeof v === 'bigint' ? v.toString() : v
+			));
+
+			this.logger.log(resultSafe);
 		} catch (e) {
 			this.logger.error(e);
 		} finally {
