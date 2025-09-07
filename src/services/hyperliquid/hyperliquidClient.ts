@@ -185,8 +185,6 @@ export class HyperLiquidClient extends AbstractDexClient {
 			//			release();
 		}
 
-		await _sleep(fillWaitTime);
-
 		setTimeout(async () => {
 			const isFilled = await this.isOrderFilled(orderId, market, {
 				...(vaultAddress && { user: vaultAddress })
