@@ -377,7 +377,9 @@ export class DriftClient extends AbstractDexClient {
                           marketIndex: perpMarketAccount.marketIndex,
                           direction: side == OrderSide.SELL ? drift.PositionDirection.SHORT : drift.PositionDirection.LONG,
                           baseAssetAmount: baseAssetAmount,
-                          orderType: drift.OrderType.MARKET
+                          orderType: drift.OrderType.LIMIT, 
+			  price: new drift.BN(price * drift.PRICE_PRECISION.toNumber()),
+			  postOnly: drift.PostOnlyParams.NONE, 
                         };
 		
 			const txSig = await this.client.placePerpOrder(params);
