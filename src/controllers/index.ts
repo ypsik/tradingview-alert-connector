@@ -118,6 +118,26 @@ function writeNewEntries({
 				typedPosition.netFunding || '',
 				typedPosition.subaccountNumber?.toString() || ''
 			];
+		}
+		else if (exchange === 'Aster') {
+			const typedPosition = position as aster.Position;
+	
+			record = [
+				typedPosition.symbol || '',                        // z. B. BTCUSDT
+				'OPEN',                                           // Status (du kannst auch dynamisch setzen falls nötig)
+				typedPosition.positionSide || '',                 // LONG / SHORT
+				typedPosition.positionAmt?.toString() || '',      // Positionsgröße
+				typedPosition.leverage?.toString() || '',         // Hebel
+				typedPosition.entryPrice?.toString() || '',       // Entry Price
+				typedPosition.markPrice?.toString() || '',        // Aktueller Mark Price
+				'',                                               // createdAt (Aster liefert nur updateTime)
+				typedPosition.updateTime?.toString() || '',       // Update Time (Epoch ms)
+				'',                                               // closedAt (nicht im Type vorhanden)
+				typedPosition.unrealizedProfit?.toString() || '', // PnL
+				typedPosition.marginType || '',                   // CROSS / ISOLATED
+				typedPosition.isolatedMargin?.toString() || '',   // falls isolated
+				''                                                // Platzhalter für Subaccount oder andere Infos
+			];			
 		} else {
 			const typedPosition = position as Position;
 
