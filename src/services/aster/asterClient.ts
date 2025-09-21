@@ -28,7 +28,8 @@ export class AsterClient extends AbstractDexClient {
 
 		this.client = new asterApiClient( {
 				apiKey: process.env.ASTER_API_KEY!,
-				apiSecret: process.env.ASTER_API_SECRET!
+				apiSecret: process.env.ASTER_API_SECRET!,
+				recvWindow: 10000
 			}
 
 		);

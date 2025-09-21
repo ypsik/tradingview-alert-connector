@@ -73,6 +73,7 @@ export class AsterClient {
   private recvWindow: number;
   private http: AxiosInstance;
   private symbolCache: Record<string, SymbolInfo> = {};
+  private timeOffset: number = 0;
 
   constructor(options: ApiOptions) {
     this.apiKey = options.apiKey;
@@ -85,6 +86,14 @@ export class AsterClient {
       headers: { "X-MBX-APIKEY": this.apiKey },
       timeout: 10000,
     });
+    this.initTimeOffset();
+  }
+
+  private async initTimeOffset() {
+    const res = await axios.get(`${this.baseUrl}/fapi/v1/time`);
+    const serverTime = res.data.serverTime;
+    this.timeOffset = serverTime - Date.now();
+    console.log("⏱️ Zeit-Offset:", this.timeOffset, "ms");
   }
 
   private sign(totalParams: string): string {
