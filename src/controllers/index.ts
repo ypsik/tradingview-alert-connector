@@ -71,7 +71,6 @@ type SupportedExchanges =
 	| 'Mars'
 	| 'Apex';
 
-
 function writeNewEntries({
 	exchange,
 	positions
@@ -81,28 +80,22 @@ function writeNewEntries({
 }) {
 	const folderPath = './data/custom/exports/';
 	if (!fs.existsSync(folderPath)) {
-		fs.mkdirSync(folderPath, {
-			recursive: true
-		});
+		fs.mkdirSync(folderPath, { recursive: true });
 	}
 
 	const fullPath = folderPath + `/positions${exchange}.csv`;
-	if (!fs.existsSync(fullPath)) {
-		const headerString =
-			'market,status,side,size,maxSize,entryPrice,exitPrice,createdAt,createdAtHeight,closedAt,sumOpen,sumClose,netFunding,subaccountNumber';
-		fs.writeFileSync(fullPath, headerString);
-	}
 
-	const records = fs.readFileSync(fullPath).toString('utf-8').split('\n');
+	// Header
+	const headerString =
+		'market,status,side,size,maxSize,entryPrice,exitPrice,createdAt,createdAtHeight,closedAt,sumOpen,sumClose,netFunding,subaccountNumber';
 
-	const newRecords = [];
+	const newRecords: string[][] = [];
 
 	for (const position of positions) {
 		let record: string[];
 
 		if (exchange === 'Dydxv4') {
 			const typedPosition = position as MarketData;
-
 			record = [
 				typedPosition.market || '',
 				typedPosition.status || '',
@@ -119,29 +112,26 @@ function writeNewEntries({
 				typedPosition.netFunding || '',
 				typedPosition.subaccountNumber?.toString() || ''
 			];
-		}
-		else if (exchange === 'Aster') {
+		} else if (exchange === 'Aster') {
 			const typedPosition = position as aster.Position;
-	
 			record = [
-				typedPosition.symbol || '',                        // z. B. BTCUSDT
-				'OPEN',                                           // Status (du kannst auch dynamisch setzen falls nötig)
-				typedPosition.positionSide || '',                 // LONG / SHORT
-				typedPosition.positionAmt?.toString() || '',      // Positionsgröße
-				typedPosition.leverage?.toString() || '',         // Hebel
-				typedPosition.entryPrice?.toString() || '',       // Entry Price
-				typedPosition.markPrice?.toString() || '',        // Aktueller Mark Price
-				'',                                               // createdAt (Aster liefert nur updateTime)
-				typedPosition.updateTime?.toString() || '',       // Update Time (Epoch ms)
-				'',                                               // closedAt (nicht im Type vorhanden)
-				typedPosition.unrealizedProfit?.toString() || '', // PnL
-				typedPosition.marginType || '',                   // CROSS / ISOLATED
-				typedPosition.isolatedMargin?.toString() || '',   // falls isolated
-				''                                                // Platzhalter für Subaccount oder andere Infos
-			];			
+				typedPosition.symbol || '',
+				'OPEN',
+				typedPosition.positionSide || '',
+				typedPosition.positionAmt?.toString() || '',
+				typedPosition.leverage?.toString() || '',
+				typedPosition.entryPrice?.toString() || '',
+				typedPosition.markPrice?.toString() || '',
+				'',
+				typedPosition.updateTime?.toString() || '',
+				'',
+				typedPosition.unrealizedProfit?.toString() || '',
+				typedPosition.marginType || '',
+				typedPosition.isolatedMargin?.toString() || '',
+				''
+			];
 		} else {
 			const typedPosition = position as Position;
-
 			record = [
 				typedPosition.symbol || '',
 				'OPEN',
@@ -160,20 +150,16 @@ function writeNewEntries({
 			];
 		}
 
-		if (
-			records.includes(record.toString()) ||
-			records.includes(`${record.toString()},`)
-		)
-			continue;
-
 		newRecords.push(record);
 	}
 
-	const appendString = newRecords.map((record) => `\n${record.join()}`).join();
+	// Alle Zeilen zusammenfügen: Header + Records
+	const allData = [headerString, ...newRecords.map(r => r.join(','))].join('\n');
 
-	fs.appendFileSync(fullPath, appendString);
+	// Überschreiben statt anhängen
+	fs.writeFileSync(fullPath, allData, 'utf-8');
 }
-
+	
 const getExchangeVariables = (exchange: string) => {
 	switch (exchange) {
 		case 'dydxv4':

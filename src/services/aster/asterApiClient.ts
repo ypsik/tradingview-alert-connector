@@ -255,7 +255,8 @@ export class AsterClient {
       marginType: p.marginType,
       isolatedMargin: p.isolatedMargin ? parseFloat(p.isolatedMargin) : undefined,
       updateTime: p.updateTime,
-    }));
+    }))
+    .filter((p) => p.positionAmt !== 0);;
   }
 }
 
