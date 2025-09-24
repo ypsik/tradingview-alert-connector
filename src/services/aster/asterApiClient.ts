@@ -86,7 +86,7 @@ export class AsterClient {
       headers: { "X-MBX-APIKEY": this.apiKey },
       timeout: 10000,
     });
-    this.initTimeOffset();
+//    this.initTimeOffset();
   }
 
   private async initTimeOffset() {

@@ -13,6 +13,7 @@ import * as aster  from '../aster';
 import * as mars  from '../mars';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
+import { shouldProcessAlert } from '../utils/dedupe';
 
 const logger = new CustomLogger('Controller');
 
@@ -520,6 +521,13 @@ router.post('/', async (req, res) => {
 		return;
 	}
 
+	// 🔒 Dedupe-Check: blockt doppelte Alerts innerhalb von 5 Sekunden
+	if (!shouldProcessAlert(req.body)) {
+		logger.log('⚠️ Duplicate alert ignored:', req.body);
+		res.send('Duplicate alert ignored');
+		return;
+	}
+	
 	// TODO: add check if dex client isReady
 
 	try {
