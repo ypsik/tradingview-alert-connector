@@ -385,6 +385,21 @@ export class DriftClient extends AbstractDexClient {
 			const txSig = await this.client.placePerpOrder(params);
 			const confirmation = await this.client.connection.confirmTransaction(txSig, "confirmed");
 			this.logger.log('Transaction sent');
+	                setTimeout(async () => {			 
+			    if(newPositionSize == 0) {
+				try {
+				    // PnL auf dein main collateral setzen
+				    const tx2 = await this.client.settlePNL(					
+					this.user.getUserAccountPublicKey(),
+					this.user.getUserAccount(),
+					0				     
+				    );
+				    console.log("PnL settled:", tx2);
+				  } catch (e) {
+				    console.log("Keine PnL zum Settle verfügbar.");
+				  }
+			     }
+		        }, fillWaitTime);
 		} catch (e) {
 			this.logger.error(e);
 		} finally {
