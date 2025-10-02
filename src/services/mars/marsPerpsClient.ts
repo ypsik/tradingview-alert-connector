@@ -277,15 +277,31 @@ export class marsPerpsClient {
 
       console.warn("[Mars] Simulation failed, use fallback fee:", err.message);
 
-      // Fallback Fee
       const fallbackGas = this.lastGasUsed
-        ? Math.floor(this.lastGasUsed * 1.3)
-        : 10_000_000; // Default 10M
+	  ? Math.floor(this.lastGasUsed * 1.3)
+	  : 200_000; // kleinerer Default statt 10 Mio
 
-      fee = {
-        amount: [{ denom: "untrn", amount: "25000" }],
-        gas: fallbackGas.toString(),
-      };
+      // Chain minGasPrice (laut Neutron-Params 0.01 untrn/gas)
+      const minGasPrice = 0.01;
+      const requiredChainFee = Math.ceil(fallbackGas * minGasPrice);
+
+      // Keeper-MinFee vom Contract
+      let keeperFeeAmount = 0;
+      try {
+	  const keeperMinFee = await this.getKeeperMinFee();
+	  keeperFeeAmount = parseInt(keeperMinFee.amount, 10);
+      } catch (e) {
+	  console.warn("[Mars] Keeper min fee fetch failed:", e.message);
+     }
+
+     // Nimm das Maximum aus ChainFee und KeeperFee
+     const requiredAmount = Math.max(requiredChainFee, keeperFeeAmount);
+
+     fee = {
+	amount: [{ denom: "untrn", amount: requiredAmount.toString() }],
+	 gas: fallbackGas.toString(),
+     };
+
     }
 
     return await this.signingClient.signAndBroadcast(
