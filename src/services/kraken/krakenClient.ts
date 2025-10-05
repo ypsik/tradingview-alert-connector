@@ -19,7 +19,6 @@ export class KrakenClient extends AbstractDexClient {
 		super();
 
 		this.logger = new CustomLogger('Kraken');
-
 		if (!process.env.KRAKEN_FUTURES_API_KEY || !process.env.KRAKEN_FUTURES_API_SECRET) {
 			this.logger.warn('Credentials are not set as environment variable');
 		}

@@ -7,6 +7,7 @@ import { Position } from 'ccxt';
 import * as aster from '../aster';
 import * as nexo from '../nexo';
 import * as mars from '../mars';
+import * as lighter from 'lighter-ts-sdk/dist/api/account-api';
 
 import {
   PerpPosition
@@ -16,7 +17,7 @@ export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;
 	abstract placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | aster.Position[] | mars.OpenPosition[] | PerpPosition[],
+		openedPositions: Position[] | MarketData[] | nexo.FuturesPosition[] | aster.Position[] | mars.OpenPosition[] | PerpPosition[] | lighter.AccountPosition[],
 		mutex: Mutex
 	);
 	abstract getOpenedPositions();

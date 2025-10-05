@@ -1,10 +1,10 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import controller from './controllers/index';
 import * as Sentry from '@sentry/node';
 import * as Tracing from '@sentry/tracing';
 import { CaptureConsole as CaptureConsoleIntegration } from '@sentry/integrations';
 import helmet from 'helmet';
-import 'dotenv/config';
 import { CustomLogger } from './services/logger/logger.service';
 
 const app: express.Express = express();

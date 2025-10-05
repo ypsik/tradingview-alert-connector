@@ -10,6 +10,7 @@ import { HyperLiquidClient } from './hyperliquid/hyperliquidClient';
 import { ApexClient } from './apex/apexClient';
 import { DriftClient } from './drift/driftClient';
 import { MarsClient } from './mars/marsClient';
+import { LighterClient } from './lighter/lighterClient';
 
 export class DexRegistry {
 	private registeredDexs: Map<string, AbstractDexClient>;
@@ -27,6 +28,8 @@ export class DexRegistry {
 		this.registeredDexs.set('aster', new AsterClient());
 		this.registeredDexs.set('mars', new MarsClient());
 		this.registeredDexs.set('apex', new ApexClient());
+		this.registeredDexs.set('lighter', new LighterClient());
+
 	}
 
 	getDex(dexKey: string): AbstractDexClient | undefined {

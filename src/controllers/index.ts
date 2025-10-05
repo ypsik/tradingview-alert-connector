@@ -11,6 +11,7 @@ import {
 import * as nexo  from '../nexo';
 import * as aster  from '../aster';
 import * as mars  from '../mars';
+import * as lighter from 'lighter-ts-sdk/dist/api/account-api';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../services/logger/logger.service';
 import { shouldProcessAlert } from '../utils/dedupe';
@@ -30,7 +31,7 @@ const driftClient = staticDexRegistry.getDex('drift');
 const asterClient = staticDexRegistry.getDex('aster');
 const marsClient = staticDexRegistry.getDex('mars');
 const apexClient = staticDexRegistry.getDex('apex');
-
+const lighterClient = staticDexRegistry.getDex('lighter');
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
@@ -43,7 +44,7 @@ let openedPositionsDrift: PerpPosition[] = [];
 let openedPositionsAster: aster.Position[] = [];
 let openedPositionsMars: mars.OpenPosition[] = [];
 let openedPositionsApex: Position[] = [];
-
+let openedPositionsLighter: lighter.AccountPosition[] = [];
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
@@ -56,7 +57,7 @@ const mutexDrift = new Mutex();
 const mutexAster = new Mutex();
 const mutexMars = new Mutex();
 const mutexApex = new Mutex();
-
+const mutexLighter = new Mutex();
 
 type SupportedExchanges =
 	| 'Dydxv4'
@@ -69,14 +70,15 @@ type SupportedExchanges =
 	| 'Aster'
 	| 'Drift'
 	| 'Mars'
-	| 'Apex';
+	| 'Apex'
+	| 'Lighter';
 
 function writeNewEntries({
 	exchange,
 	positions
 }: {
 	exchange: SupportedExchanges;
-	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[] | aster.Position[] | mars.OpenPosition[];
+	positions: MarketData[] | Position[] | nexo.FuturesPosition[] | PerpPosition[] | aster.Position[] | mars.OpenPosition[] | lighter.AccountPosition[];
 }) {
 	const folderPath = './data/custom/exports/';
 	if (!fs.existsSync(folderPath)) {
@@ -212,10 +214,10 @@ const getExchangeVariables = (exchange: string) => {
                                 openedPositions: openedPositionsMars,
                                 mutex: mutexMars
 			};
-                 case 'apex':
+                 case 'lighter':
                         return {
-                                openedPositions: openedPositionsApex,
-                                mutex: mutexApex                       
+                                openedPositions: openedPositionsLighter,
+                                mutex: mutexLighter                       
                         };
 
 	}
@@ -276,8 +278,8 @@ const apexUpdater = async () => {
                         exchange: 'Apex',
                         positions: openedPositionsApex
                 });
-        } catch {
-                logger.warn(`Apex is not working. Time: ${new Date()}`);
+        } catch(ex) {
+                logger.warn(`Apex is not working. Time: ${new Date()}`, ex);
         }
 };
 
@@ -293,8 +295,8 @@ const bybitUpdater = async () => {
 			exchange: 'Bybit',
 			positions: openedPositionsBybit
 		});
-	} catch {
-		logger.warn(`Bybit is not working. Time: ${new Date()}`);
+	} catch(ex) {
+		logger.warn(`Bybit is not working. Time: ${new Date()}`, ex);
 	}
 };
 
@@ -349,8 +351,8 @@ const krakenUpdater = async () => {
                         exchange: 'Kraken',
                         positions: openedPositionsKraken
                 });
-        } catch {
-                logger.warn(`Kraken is not working. Time: ${new Date()}`);
+        } catch(ex) {
+                logger.warn(`Kraken is not working. Time: ${new Date()}`, ex);
         }
 };
 
@@ -431,6 +433,27 @@ const marsUpdater = async () => {
 };
 
 
+const lighterUpdater = async () => {
+        try {
+                if (!process.env.LIGHTER_API_KEY || !process.env.LIGHTER_API_SECRET ||
+                    !process.env.LIGHTER_ACCOUNT_INDEX || !process.env.LIGHTER_API_KEY_INDEX) {                   
+                        return;
+                }
+
+                const lighterPositions = await lighterClient.getOpenedPositions();
+
+                openedPositionsLighter = lighterPositions as unknown as lighter.AccountPosition[];
+                writeNewEntries({
+                        exchange: 'Lighter',
+                        positions: openedPositionsLighter
+                });
+        } catch(ex) {
+                logger.warn(`Lighter is not working. Time: ${new Date()}`, ex);
+        }
+};
+
+
+
 CronJob.from({
 	cronTime: process.env.UPDATE_POSITIONS_TIMER || '*/30 * * * * *', // Every 30 seconds
 	onTick: async () => {
@@ -445,7 +468,8 @@ CronJob.from({
 			driftUpdater(),
 			asterUpdater(),
 			marsUpdater(),
-			apexUpdater()
+			apexUpdater(),
+			lighterUpdater()
 		]);
 	},
 	runOnInit: true,
@@ -459,7 +483,7 @@ router.get('/', async (req, res) => {
 router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars', 'apex'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars', 'apex', 'lighter'];
 	const dexClients = dexNames.map((name) => staticDexRegistry.getDex(name));
 
 	try {
@@ -479,6 +503,7 @@ router.get('/accounts', async (req, res) => {
 			Aster: accountStatuses[8], // aster
 			Mars: accountStatuses[9], // mars
 			Apex: accountStatuses[10], // apex
+			Lighter:  accountStatuses[11], // lighter
 			
 		};
 		res.send(message);

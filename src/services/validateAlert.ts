@@ -42,7 +42,7 @@ export const validateAlert = async (
 	if (
 		alertMessage.direction != 'long' &&
 		alertMessage.direction != 'short' &&
-		alertMessage.direction != 'flat'
+		alertMessage.direction
 	) {
 		console.error('Direction field of tradingview alert is not correct.');
 		return false;

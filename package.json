@@ -38,7 +38,7 @@
 		"async-mutex": "^0.5.0",
 		"axios": "^1.6.7",
 		"big.js": "6.1.1",
-		"ccxt": "^4.3.68",
+		"ccxt": "^4.5.7",
 		"chalk": "^4.1.2",
 		"config": "^3.3.7",
 		"cron": "^3.1.7",
@@ -51,11 +51,13 @@
 		"helmet": "^5.0.2",
 		"jito-ts": "^4.2.0",
 		"js-yaml": "^4.1.0",
+		"lighter-ts-sdk": "^1.0.4",
 		"lodash": "^4.17.21",
 		"node-json-db": "^1.4.1",
 		"simple-rate-limiter": "^0.5.0",
 		"solana-bankrun": "^0.2.0",
 		"typescript": "^5.1.6",
+		"webcrypto-shim": "^0.1.7",
 		"ws": "^8.18.0"
 	},
 	"devDependencies": {

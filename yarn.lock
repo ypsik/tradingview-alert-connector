@@ -3650,10 +3650,10 @@ caniuse-lite@^1.0.30001726:
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001731.tgz#277c07416ea4613ec564e5b0ffb47e7b60f32e2f"
   integrity sha512-lDdp2/wrOmTRWuoB5DpfNkC0rJDU8DqRa6nYL6HK6sytw70QMopt/NIc/9SM7ylItlBWfACXk0tEn37UWM/+mg==
 
-ccxt@^4.3.68:
-  version "4.4.99"
-  resolved "https://registry.yarnpkg.com/ccxt/-/ccxt-4.4.99.tgz#54f04dbad36ddd6d9582a57b6746ee8e3acf22f5"
-  integrity sha512-89wAaTMP/79itKvy7FjvSxowFD1yREi3cE5K46bzmJnm/4EC4qJ0wvs1vm90VjpaU9UZr7MCImU68ttY4j/vlw==
+ccxt@^4.5.7:
+  version "4.5.7"
+  resolved "https://registry.yarnpkg.com/ccxt/-/ccxt-4.5.7.tgz#3ab12b21f8cf0c1870fa9672211fd5b0df928703"
+  integrity sha512-7OeJLN+Aj5nLB3gQnXpLwTVGRw2HzfmJIcZhmJ6kvb7w8QmzGn6w7QF8pDYWeN1IsQyHX4itfkioUcsxZwBhNQ==
   dependencies:
     ws "^8.8.1"
 
@@ -4021,6 +4021,11 @@ dotenv@^16.0.0, dotenv@^16.0.3:
   resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-16.6.1.tgz#773f0e69527a8315c7285d5ee73c4459d20a8020"
   integrity sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==
 
+dotenv@^17.2.0:
+  version "17.2.3"
+  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-17.2.3.tgz#ad995d6997f639b11065f419a22fabf567cdb9a2"
+  integrity sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==
+
 dunder-proto@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/dunder-proto/-/dunder-proto-1.0.1.tgz#d7ae667e1dc83482f8b70fd0f6eefc50da30f58a"
@@ -4336,7 +4341,7 @@ ethers@5.5.0:
     "@ethersproject/web" "5.5.0"
     "@ethersproject/wordlists" "5.5.0"
 
-ethers@^6.6.1:
+ethers@^6.6.1, ethers@^6.8.0:
   version "6.15.0"
   resolved "https://registry.yarnpkg.com/ethers/-/ethers-6.15.0.tgz#2980f2a3baf0509749b7e21f8692fa8a8349c0e3"
   integrity sha512-Kf/3ZW54L4UT0pZtsY/rf+EkBU7Qi5nnhonjUb8yTXcxH3cdcWrV2cRyk0Xk/4jK6OoHhxxZHriyhje20If2hQ==
@@ -5673,6 +5678,16 @@ lie@3.1.1:
   integrity sha512-RiNhHysUjhrDQntfYSfY4MU24coXXdEOgw9WGcKHNeEwffDYbF//u87M1EWaMGzuFoSbqW0C9C6lEEhDOAswfw==
   dependencies:
     immediate "~3.0.5"
+
+lighter-ts-sdk@^1.0.4:
+  version "1.0.4"
+  resolved "https://registry.yarnpkg.com/lighter-ts-sdk/-/lighter-ts-sdk-1.0.4.tgz#e15427bb17db10a43bd141da9ba92181fa6142b5"
+  integrity sha512-gV4a9NH7atdXsXAS+Ttq4VcpgEQeVGpokUZfcK7FREYbgcEwBVPR9b3pIKQ06xfqBOsrz4O6NOkypLVwBpnAfQ==
+  dependencies:
+    axios "^1.6.0"
+    dotenv "^17.2.0"
+    ethers "^6.8.0"
+    ws "^8.14.0"
 
 lines-and-columns@^1.1.6:
   version "1.2.4"
@@ -7202,6 +7217,11 @@ walker@^1.0.8:
   dependencies:
     makeerror "1.0.12"
 
+webcrypto-shim@^0.1.7:
+  version "0.1.7"
+  resolved "https://registry.yarnpkg.com/webcrypto-shim/-/webcrypto-shim-0.1.7.tgz#da8be23061a0451cf23b424d4a9b61c10f091c12"
+  integrity sha512-JAvAQR5mRNRxZW2jKigWMjCMkjSdmP5cColRP1U/pTg69VgHXEi1orv5vVpJ55Zc5MIaPc1aaurzd9pjv2bveg==
+
 webidl-conversions@^3.0.0:
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/webidl-conversions/-/webidl-conversions-3.0.1.tgz#24534275e2a7bc6be7bc86611cc16ae0a5654871"
@@ -7282,7 +7302,7 @@ ws@^7, ws@^7.5.10:
   resolved "https://registry.yarnpkg.com/ws/-/ws-7.5.10.tgz#58b5c20dc281633f6c19113f39b349bd8bd558d9"
   integrity sha512-+dbF1tHwZpXcbOJdVOkzLDxZP1ailvSxM6ZweXTegylPny803bFhA+vqBYw4s31NSAk4S2Qz+AKXK9a4wkdjcQ==
 
-ws@^8.14.2, ws@^8.18.0, ws@^8.5.0, ws@^8.8.1:
+ws@^8.14.0, ws@^8.14.2, ws@^8.18.0, ws@^8.5.0, ws@^8.8.1:
   version "8.18.3"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.3.tgz#b56b88abffde62791c639170400c93dcb0c95472"
   integrity sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==
