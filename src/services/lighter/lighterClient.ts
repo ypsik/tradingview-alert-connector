@@ -273,7 +273,7 @@ export class LighterClient extends AbstractDexClient {
 				return;
 			}
 
-			const profit = calculateProfit(orderParams.price, parseFloat(position.entry_price));
+			const profit = calculateProfit(orderParams.price, parseFloat((position as any).avg_entry_price || position.entry_price || '0'));
 			const minimumProfit =
 				alertMessage.minProfit ??
 				parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
@@ -288,7 +288,7 @@ export class LighterClient extends AbstractDexClient {
 				return;
 			}
 
-			const sum = Math.abs(parseFloat(position.size));
+			const sum = Math.abs(parseFloat((position as any).position || position.size || '0'));
 
 			size =
 				orderMode === 'full' || newPositionSize == 0
@@ -305,7 +305,7 @@ export class LighterClient extends AbstractDexClient {
 					return;
 				}
 			} else {
-				const positionSize = parseFloat(position.size);
+				const positionSize = parseFloat((position as any).position || position.size || '0');
 				
 				if (newPositionSize == 0) {
 					size = Math.abs(positionSize);
