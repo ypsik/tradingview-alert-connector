@@ -1,4 +1,5 @@
 import { SignerClient } from 'lighter-ts-sdk';
+import { AccountPosition } from 'lighter-ts-sdk/dist/api/account-api';
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
 import {
 	_sleep,
@@ -11,21 +12,15 @@ import { AbstractDexClient } from '../abstractDexClient';
 import { Mutex } from 'async-mutex';
 import { CustomLogger } from '../logger/logger.service';
 
-export interface LighterPosition {
-	symbol: string;
-	position: string;
-	avg_entry_price: string;
-	market_id?: number;
-	unrealized_pnl?: string;
-	margin?: string;
-}
-
 export class LighterClient extends AbstractDexClient {
 	private readonly client: SignerClient;
 	private readonly apiClient: any;
+	private wsClient: any;
 	private readonly logger: CustomLogger;
 	private initPromise: Promise<void>;
 	private marketIndexCache: Map<string, number> = new Map();
+	private cachedPositions: AccountPosition[] = [];
+	private wsConnected: boolean = false;
 
 	constructor() {
 		super();
@@ -75,16 +70,101 @@ export class LighterClient extends AbstractDexClient {
 			
 			(this as any).apiClient = apiClient;
 			
-			this.logger.log('ApiClient created:', {
-				hasApiClient: !!this.apiClient,
-				apiClientType: typeof this.apiClient
-			});
+			this.logger.log('ApiClient created');
+			
+			// Initialize WebSocket for real-time position updates
+			await this.initializeWebSocket();
 			
 			this.logger.log('Lighter client initialized successfully');
 		} catch (e) {
 			this.logger.error('Failed to initialize Lighter client:', e);
 			throw e;
 		}
+	}
+
+	private async initializeWebSocket(): Promise<void> {
+		try {
+			const { WsClient } = await import('lighter-ts-sdk');
+			const wsUrl = (process.env.LIGHTER_API_URL || 'https://mainnet.zklighter.elliot.ai').replace('https://', 'wss://').replace('http://', 'ws://');
+			
+			this.wsClient = new WsClient({ 
+				url: `${wsUrl}/stream`,
+				onOpen: () => {
+					this.wsConnected = true;
+					this.logger.log('WebSocket connected to /stream');
+				},
+				onClose: () => {
+					this.logger.warn('WebSocket disconnected - using API fallback');
+					this.wsConnected = false;
+				},
+				onError: (error: Error) => {
+					this.logger.warn('WebSocket error - using API fallback:', error.message);
+					this.wsConnected = false;
+				},
+				onMessage: (message: any) => {
+					// Handle ping/pong to keep connection alive
+					if (message.type === 'ping') {
+						try {
+							this.wsClient.send({ type: 'pong' });
+						} catch (e) {
+							this.logger.warn('Failed to send pong:', e);
+						}
+						return;
+					}
+					
+					// Log all messages for debugging
+					if (message.error) {
+						this.logger.warn('WebSocket subscription error - using API fallback:', message.error.message);
+						this.wsConnected = false;
+						return;
+					}
+					
+					if (message.type !== 'connected') {
+						this.logger.log('WebSocket message:', JSON.stringify(message).substring(0, 200));
+					}
+					
+					// Handle account updates - positions is an object with market_id as keys
+					if (message.positions && typeof message.positions === 'object') {
+						const positions: AccountPosition[] = [];
+						
+						for (const [marketId, pos] of Object.entries(message.positions)) {
+							const p = pos as any;
+							const positionSize = parseFloat(p.position || '0');
+							
+							if (positionSize !== 0) {
+								positions.push(p as AccountPosition);
+							}
+						}
+						
+						this.cachedPositions = positions;
+						this.logger.log(`WebSocket: Updated ${this.cachedPositions.length} positions`);
+					}
+				}
+			});
+			
+			await this.wsClient.connect();
+			
+			// Send subscription in Lighter's format
+			try {
+				const accountIndex = parseInt(process.env.LIGHTER_ACCOUNT_INDEX!);
+				// Lighter uses {type: 'subscribe', channel: 'account_all/{id}'} format
+				this.wsClient.send({
+					type: 'subscribe',
+					channel: `account_all/${accountIndex}`
+				});
+				this.logger.log(`WebSocket subscribed to account_all/${accountIndex}`);
+			} catch (subError) {
+				this.logger.warn('WebSocket subscription failed - using API fallback');
+				this.wsConnected = false;
+			}
+		} catch (e) {
+			this.logger.log('WebSocket unavailable - using API polling as fallback');
+			this.wsConnected = false;
+		}
+	}
+
+	private async reconnectWebSocket(): Promise<void> {
+		return;
 	}
 
 	public async getIsAccountReady(): Promise<boolean> {
@@ -171,18 +251,29 @@ export class LighterClient extends AbstractDexClient {
 
 		let size = orderParams.size;
 
+		// Use WebSocket-cached positions if available, otherwise use passed positions as fallback
+		const positions = this.wsConnected && this.cachedPositions.length > 0 
+			? this.cachedPositions 
+			: openedPositions;
+		
+		if (this.wsConnected) {
+			this.logger.log('Using WebSocket-cached positions');
+		} else {
+			this.logger.log('Using fallback positions from parameter');
+		}
+
 		if (
 			(side === OrderSide.SELL && direction === 'long') ||
 			(side === OrderSide.BUY && direction === 'short')
 		) {
-			const position = openedPositions.find((el) => el.market_id === marketIndex);
+			const position = positions.find((el) => el.market_id === marketIndex);
 
 			if (!position) {
 				this.logger.log('order is ignored because position not exists');
 				return;
 			}
 
-			const profit = calculateProfit(orderParams.price, parseFloat(position.avg_entry_price) / 100);
+			const profit = calculateProfit(orderParams.price, parseFloat(position.entry_price));
 			const minimumProfit =
 				alertMessage.minProfit ??
 				parseFloat(process.env.MINIMUM_PROFIT_PERCENT);
@@ -197,14 +288,14 @@ export class LighterClient extends AbstractDexClient {
 				return;
 			}
 
-			const sum = Math.abs(parseFloat(position.position));
+			const sum = Math.abs(parseFloat(position.size));
 
 			size =
 				orderMode === 'full' || newPositionSize == 0
 					? sum
 					: Math.min(size, sum);
 		} else if (orderMode === 'full' || newPositionSize == 0) {
-			const position = openedPositions.find((el) => el.market_id === marketIndex);
+			const position = positions.find((el) => el.market_id === marketIndex);
 			
 			if (!position) {
 				if (newPositionSize == 0) {
@@ -214,14 +305,14 @@ export class LighterClient extends AbstractDexClient {
 					return;
 				}
 			} else {
-				const positionSize = parseFloat(position.position);
+				const positionSize = parseFloat(position.size);
 				
 				if (newPositionSize == 0) {
 					size = Math.abs(positionSize);
-					side = positionSize > 0 ? OrderSide.SELL : OrderSide.BUY;
+					side = position.side === 'long' ? OrderSide.SELL : OrderSide.BUY;
 				} else if (
-					(side === OrderSide.SELL && positionSize > 0) ||
-					(side === OrderSide.BUY && positionSize < 0)
+					(side === OrderSide.SELL && position.side === 'long') ||
+					(side === OrderSide.BUY && position.side === 'short')
 				) {
 					size = Math.abs(positionSize);
 				}
@@ -345,7 +436,7 @@ export class LighterClient extends AbstractDexClient {
 		}
 	};
 
-	public getOpenedPositions = async (): Promise<LighterPosition[]> => {
+	public getOpenedPositions = async (): Promise<AccountPosition[]> => {
 		await this.initPromise;
 		
 		try {
@@ -357,7 +448,7 @@ export class LighterClient extends AbstractDexClient {
 				value: process.env.LIGHTER_ACCOUNT_INDEX! 
 			});
 
-			const positions: LighterPosition[] = [];
+			const positions: AccountPosition[] = [];
 			
 			const targetAccountIndex = parseInt(process.env.LIGHTER_ACCOUNT_INDEX!);
 			const account = (response as any)?.accounts?.find((acc: any) => acc.account_index === targetAccountIndex);
@@ -372,14 +463,7 @@ export class LighterClient extends AbstractDexClient {
 					const positionSize = parseFloat(p.position || '0');
 					
 					if (Math.abs(positionSize) > 0) {
-						positions.push({
-							symbol: p.symbol,
-							position: p.position,
-							avg_entry_price: p.avg_entry_price,
-							market_id: p.market_id,
-							unrealized_pnl: p.unrealized_pnl,
-							margin: p.margin,
-						});
+						positions.push(p as AccountPosition);
 					}
 				}
 			}
