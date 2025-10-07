@@ -214,6 +214,11 @@ const getExchangeVariables = (exchange: string) => {
                                 openedPositions: openedPositionsMars,
                                 mutex: mutexMars
 			};
+		 case 'apex':
+                        return {
+                                openedPositions: openedPositionsApex,
+                                mutex: mutexApex
+                        };
                  case 'lighter':
                         return {
                                 openedPositions: openedPositionsLighter,
