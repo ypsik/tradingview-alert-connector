@@ -221,6 +221,14 @@ export class DriftClient extends AbstractDexClient {
 	  } 
 	}
 
+	private async refreshBlockhash() {
+	  const { blockhash, lastValidBlockHeight } = await this.client.connection.getLatestBlockhash("confirmed");
+	  const txSender = this.client.txSender as any;
+	  txSender.blockhash = blockhash;
+	  txSender.lastValidBlockHeight = lastValidBlockHeight;
+	  await new Promise(r => setTimeout(r, 500));
+	}
+
 	public async getIsAccountReady(): Promise<boolean> {
 		await this.readyPromise;
 		try {
@@ -388,6 +396,11 @@ export class DriftClient extends AbstractDexClient {
     
 			while (retries <= maxRetries) {
 			        try {
+					if (retries > 0) {
+					   await new Promise(r => setTimeout(r, 1000)); // RPC limit
+					   this.logger.log("Refreshing blockhash before retry...");
+					   await this.refreshBlockhash();
+				    }
 			            txSig = await this.client.placePerpOrder(params);
 			            break;
 			        } catch (e) {
@@ -400,8 +413,8 @@ export class DriftClient extends AbstractDexClient {
 			        }
 			}
 			const confirmation = await this.client.connection.confirmTransaction(txSig, "confirmed");
-	               this.logger.log('Transaction sent');
-	               setTimeout(async () => {			 
+	                this.logger.log('Transaction sent');
+	                setTimeout(async () => {			 
 	                     if(newPositionSize == 0) {
 				try {
 				    // PnL auf dein main collateral setzen
