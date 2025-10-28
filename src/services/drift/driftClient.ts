@@ -382,11 +382,27 @@ export class DriftClient extends AbstractDexClient {
 			  postOnly: drift.PostOnlyParams.NONE, 
                         };
 		
-			const txSig = await this.client.placePerpOrder(params);
+			let txSig;
+			let retries = 0;
+			const maxRetries = 2;
+    
+			while (retries <= maxRetries) {
+			        try {
+			            txSig = await this.client.placePerpOrder(params);
+			            break;
+			        } catch (e) {
+			            if (e.message?.includes('Blockhash not found') && retries < maxRetries) {
+			                this.logger.warn(`Blockhash error, retry ${retries + 1}/${maxRetries}`);
+			                retries++;
+			            } else {
+			                throw e;
+				    }
+			        }
+			}
 			const confirmation = await this.client.connection.confirmTransaction(txSig, "confirmed");
-			this.logger.log('Transaction sent');
-	                setTimeout(async () => {			 
-			    if(newPositionSize == 0) {
+	               this.logger.log('Transaction sent');
+	               setTimeout(async () => {			 
+	                     if(newPositionSize == 0) {
 				try {
 				    // PnL auf dein main collateral setzen
 				    const tx2 = await this.client.settlePNL(					
