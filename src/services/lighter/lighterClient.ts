@@ -21,7 +21,8 @@ export class LighterClient extends AbstractDexClient {
 	private marketIndexCache: Map<string, number> = new Map();
 	private cachedPositions: AccountPosition[] = [];
 	private wsConnected: boolean = false;
-
+	private isReconnecting = false;
+	
 	constructor() {
 		super();
 
@@ -96,6 +97,9 @@ export class LighterClient extends AbstractDexClient {
 				onClose: () => {
 					this.logger.warn('WebSocket disconnected - using API fallback');
 					this.wsConnected = false;
+					this.reconnectWebSocket().catch(e => {
+						this.logger.error('Reconnect loop error:', e);
+					});
 				},
 				onError: (error: Error) => {
 					this.logger.warn('WebSocket error - using API fallback:', error.message);
@@ -164,7 +168,26 @@ export class LighterClient extends AbstractDexClient {
 	}
 
 	private async reconnectWebSocket(): Promise<void> {
-		return;
+		if (this.isReconnecting) {
+			return;
+		}
+		this.isReconnecting = true;
+		while (true) {
+			this.logger.log('Attempting to reconnect (retry every 60s)');
+			
+			try {
+				await this.initializeWebSocket();
+				
+				if (this.wsConnected) {
+					this.logger.log('WebSocket reconnected successfully');
+					return;
+				}
+			} catch (e) {
+				this.logger.warn('Reconnect attempt failed:', e);
+			}
+			
+			await _sleep(60000); // 60 seconds
+		}
 	}
 
 	public async getIsAccountReady(): Promise<boolean> {
