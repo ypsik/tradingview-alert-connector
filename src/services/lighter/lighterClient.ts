@@ -21,6 +21,8 @@ export class LighterClient extends AbstractDexClient {
 	private marketIndexCache: Map<string, number> = new Map();
 	private cachedPositions: AccountPosition[] = [];
 	private wsConnected: boolean = false;
+	private reconnectAttempts = 0;
+	private maxReconnectAttempts = 10;
 	private isReconnecting = false;
 	
 	constructor() {
@@ -97,9 +99,11 @@ export class LighterClient extends AbstractDexClient {
 				onClose: () => {
 					this.logger.warn('WebSocket disconnected - using API fallback');
 					this.wsConnected = false;
-					this.reconnectWebSocket().catch(e => {
-						this.logger.error('Reconnect loop error:', e);
-					});
+					if (!this.isReconnecting) {
+						this.reconnectWebSocket().catch(e => {
+							this.logger.error('Reconnect loop error:', e);
+						});
+					}
 				},
 				onError: (error: Error) => {
 					this.logger.warn('WebSocket error - using API fallback:', error.message);
@@ -171,15 +175,20 @@ export class LighterClient extends AbstractDexClient {
 		if (this.isReconnecting) {
 			return;
 		}
+		
 		this.isReconnecting = true;
-		while (true) {
-			this.logger.log('Attempting to reconnect (retry every 60s)');
+		
+		while (this.reconnectAttempts < this.maxReconnectAttempts) {
+			this.reconnectAttempts++;
+			this.logger.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 			
 			try {
 				await this.initializeWebSocket();
 				
 				if (this.wsConnected) {
 					this.logger.log('WebSocket reconnected successfully');
+					this.reconnectAttempts = 0;
+					this.isReconnecting = false;
 					return;
 				}
 			} catch (e) {
@@ -188,6 +197,9 @@ export class LighterClient extends AbstractDexClient {
 			
 			await _sleep(60000); // 60 seconds
 		}
+		
+		this.logger.error('Max reconnect attempts reached');
+		this.isReconnecting = false;
 	}
 
 	public async getIsAccountReady(): Promise<boolean> {
@@ -257,7 +269,7 @@ export class LighterClient extends AbstractDexClient {
 		const decimalFactor = Math.pow(10, decimals.size_decimals);
 		
 		const type = "LIMIT";
-		let side: OrderSide = orderParams.side;
+		const side = orderParams.side;
 		const mode = process.env.LIGHTER_MODE || '';
 		const direction = alertMessage.direction || null;
 
@@ -330,15 +342,11 @@ export class LighterClient extends AbstractDexClient {
 			} else {
 				const positionSize = parseFloat((position as any).position || position.size || '0');
 				
-				if (newPositionSize == 0) {
+				if (
+					(side === OrderSide.SELL && positionSize > 0) ||
+					(side === OrderSide.BUY && positionSize < 0)
+				)
 					size = Math.abs(positionSize);
-					side = position.side === 'long' ? OrderSide.SELL : OrderSide.BUY;
-				} else if (
-					(side === OrderSide.SELL && position.side === 'long') ||
-					(side === OrderSide.BUY && position.side === 'short')
-				) {
-					size = Math.abs(positionSize);
-				}
 			}
 		}
 
