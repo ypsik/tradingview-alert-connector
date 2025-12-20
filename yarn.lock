@@ -5679,10 +5679,10 @@ lie@3.1.1:
   dependencies:
     immediate "~3.0.5"
 
-lighter-ts-sdk@^1.0.4:
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/lighter-ts-sdk/-/lighter-ts-sdk-1.0.4.tgz#e15427bb17db10a43bd141da9ba92181fa6142b5"
-  integrity sha512-gV4a9NH7atdXsXAS+Ttq4VcpgEQeVGpokUZfcK7FREYbgcEwBVPR9b3pIKQ06xfqBOsrz4O6NOkypLVwBpnAfQ==
+lighter-ts-sdk@^1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/lighter-ts-sdk/-/lighter-ts-sdk-1.0.7.tgz#b78153f0a4b41d4df61be38b0d27eb27765ffb6e"
+  integrity sha512-F29VkAl8R38VLeK6/aWMn7gpYzUsfJCAohhEH4ZUPeWaY/XAiuGAkgtvrM3WPt+chTHONxE0fI9GmW54X0jIYw==
   dependencies:
     axios "^1.6.0"
     dotenv "^17.2.0"
