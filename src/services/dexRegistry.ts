@@ -5,8 +5,9 @@ import { BybitClient } from './bybit/bybitClient';
 import { KrakenClient } from './kraken/krakenClient';
 import { NexoClient } from './nexo/nexoClient';
 import { AsterClient } from './aster/asterClient';
-import { DydxV4Client } from './dydx_v4/dydxV4Client';
 import { HyperLiquidClient } from './hyperliquid/hyperliquidClient';
+import { DydxV4Client } from './dydx_v4/dydxV4Client';
+import { BitfinexClient } from './bitfinex/bitfinexClient';
 import { ApexClient } from './apex/apexClient';
 import { DriftClient } from './drift/driftClient';
 import { MarsClient } from './mars/marsClient';
@@ -19,6 +20,7 @@ export class DexRegistry {
 		this.registeredDexs = new Map();
 		this.registeredDexs.set('dydxv4', new DydxV4Client());
 		this.registeredDexs.set('hyperliquid', new HyperLiquidClient());
+		this.registeredDexs.set('bitfinex', new BitfinexClient());
 		this.registeredDexs.set('bybit', new BybitClient());
 		this.registeredDexs.set('bitget', new BitgetClient());
 		this.registeredDexs.set('bingx', new BingxClient());

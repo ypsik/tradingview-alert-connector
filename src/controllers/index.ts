@@ -22,6 +22,7 @@ const router: Router = express.Router();
 const staticDexRegistry = new DexRegistry();
 const dydxv4Client = staticDexRegistry.getDex('dydxv4');
 const hyperliquidClient = staticDexRegistry.getDex('hyperliquid');
+const bitfinexClient = staticDexRegistry.getDex('bitfinex');
 const bybitClient = staticDexRegistry.getDex('bybit');
 const bitgetClient = staticDexRegistry.getDex('bitget');
 const bingxClient = staticDexRegistry.getDex('bingx');
@@ -35,6 +36,7 @@ const lighterClient = staticDexRegistry.getDex('lighter');
 
 let openedPositionsDydxv4: MarketData[] = [];
 let openedPositionsHyperliquid: Position[] = [];
+let openedPositionsBitfinex: Position[] = [];
 let openedPositionsBybit: Position[] = [];
 let openedPositionsBitget: Position[] = [];
 let openedPositionsBingx: Position[] = [];
@@ -48,6 +50,7 @@ let openedPositionsLighter: lighter.AccountPosition[] = [];
 
 const mutexDydxv4 = new Mutex();
 const mutexHyperliquid = new Mutex();
+const mutexBitfinex = new Mutex();
 const mutexBybit = new Mutex();
 const mutexBitget = new Mutex();
 const mutexBingx = new Mutex();
@@ -61,7 +64,8 @@ const mutexLighter = new Mutex();
 
 type SupportedExchanges =
 	| 'Dydxv4'
-	| 'Hyperliquid'
+	| 'Hyperliquid' 
+	| 'Bitfinex'
 	| 'Bybit'
 	| 'Bitget'
 	| 'Bingx'
@@ -174,6 +178,12 @@ const getExchangeVariables = (exchange: string) => {
 				openedPositions: openedPositionsHyperliquid,
 				mutex: mutexHyperliquid
 			};
+		case 'bitfinex':
+                        return {
+                                openedPositions: openedPositionsBitfinex,
+                                mutex: mutexBitfinex
+                        };
+
 		case 'bybit':
 			return {
 				openedPositions: openedPositionsBybit,
@@ -304,6 +314,25 @@ const bybitUpdater = async () => {
 		logger.warn(`Bybit is not working. Time: ${new Date()}`, ex);
 	}
 };
+
+
+const bitfinexUpdater = async () => {
+        try {
+                if (!process.env.BITFINEX_API_KEY || !process.env.BITFINEX_SECRET) {
+                        return;
+                }
+
+                const bitfinexPositions = await bitfinexClient.getOpenedPositions();
+                openedPositionsBitfinex = bitfinexPositions as unknown as Position[];
+                writeNewEntries({
+                        exchange: 'Bitfinex',
+                        positions: openedPositionsBitfinex
+                });
+        } catch(ex) {
+                logger.warn(`Bitfinex is not working. Time: ${new Date()}`, ex);
+        }
+};
+
 
 const bitgetUpdater = async () => {
 	try {
@@ -466,6 +495,7 @@ CronJob.from({
 			dydxv4Updater(),
 			hyperLiquidUpdater(),
 			bybitUpdater(),
+			bitfinexUpdater(),
 			bitgetUpdater(),
 			bingxUpdater(),
 			krakenUpdater(),
@@ -488,7 +518,7 @@ router.get('/', async (req, res) => {
 router.get('/accounts', async (req, res) => {
 	logger.log('Received GET request.');
 
-	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars', 'apex', 'lighter'];
+	const dexNames = ['dydxv4', 'hyperliquid', 'bybit', 'bitget', 'bingx', 'kraken', 'nexo', 'drift', 'aster', 'mars', 'apex', 'lighter', 'bitfinex'];
 	const dexClients = dexNames.map((name) => staticDexRegistry.getDex(name));
 
 	try {
@@ -509,7 +539,7 @@ router.get('/accounts', async (req, res) => {
 			Mars: accountStatuses[9], // mars
 			Apex: accountStatuses[10], // apex
 			Lighter:  accountStatuses[11], // lighter
-			
+			Bitfinex:  accountStatuses[12], // bitfinex
 		};
 		res.send(message);
 	} catch (error) {
@@ -548,8 +578,9 @@ router.post('/', async (req, res) => {
 
 	try {
 		const { openedPositions, mutex } = getExchangeVariables(exchange);
-		await dexClient.placeOrder(req.body, openedPositions, mutex);
-
+		dexClient.placeOrder(req.body, openedPositions, mutex).catch(err => {
+			logger.log('Background order execution failed:', err);
+		});
 		res.send('OK');
 		// checkAfterPosition(req.body);
 	} catch (e) {
