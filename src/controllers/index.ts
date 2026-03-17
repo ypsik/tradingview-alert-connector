@@ -411,7 +411,7 @@ const nexoUpdater = async () => {
 const asterUpdater = async () => {
         try {
 
-                if (!process.env.ASTER_API_KEY || !process.env.ASTER_API_SECRET) {
+                if (!process.env.ASTER_API_KEY || !process.env.ASTER_API_SECRET || !process.env.ASTER_API_SIGNER) {
                         return;
                 }
 

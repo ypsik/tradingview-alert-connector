@@ -21,14 +21,16 @@ export class AsterClient extends AbstractDexClient {
 
 		this.logger = new CustomLogger('Aster');
 
-		if (!process.env.ASTER_API_KEY || !process.env.ASTER_API_SECRET) {
+		if (!process.env.ASTER_API_KEY || !process.env.ASTER_API_SECRET || !process.env.ASTER_API_SIGNER) {
 			this.logger.warn('Credentials are not set as environment variable');
 			return;
 		}
 
 		this.client = new asterApiClient( {
 				apiKey: process.env.ASTER_API_KEY!,
+				signer: process.env.ASTER_API_SIGNER!,
 				apiSecret: process.env.ASTER_API_SECRET!,
+				baseUrl: "https://fapi.asterdex.com",
 				recvWindow: 10000
 			}
 
