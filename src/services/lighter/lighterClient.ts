@@ -94,20 +94,18 @@ export class LighterClient extends AbstractDexClient {
 				url: `${wsUrl}/stream`,
 				onOpen: () => {
 					this.wsConnected = true;
+					this.reconnectAttempts = 0; 
 					this.logger.log('WebSocket connected to /stream');
 				},
 				onClose: () => {
 					this.logger.warn('WebSocket disconnected - using API fallback');
 					this.wsConnected = false;
-					if (!this.isReconnecting) {
-						this.reconnectWebSocket().catch(e => {
-							this.logger.error('Reconnect loop error:', e);
-						});
-					}
+					this.triggerReconnect();
 				},
 				onError: (error: Error) => {
 					this.logger.warn('WebSocket error - using API fallback:', error.message);
 					this.wsConnected = false;
+					this.triggerReconnect();
 				},
 				onMessage: (message: any) => {
 					// Handle ping/pong to keep connection alive
@@ -124,6 +122,7 @@ export class LighterClient extends AbstractDexClient {
 					if (message.error) {
 						this.logger.warn('WebSocket subscription error - using API fallback:', message.error.message);
 						this.wsConnected = false;
+						this.triggerReconnect();
 						return;
 					}
 					
@@ -164,10 +163,19 @@ export class LighterClient extends AbstractDexClient {
 			} catch (subError) {
 				this.logger.warn('WebSocket subscription failed - using API fallback');
 				this.wsConnected = false;
+				this.triggerReconnect();
 			}
 		} catch (e) {
 			this.logger.log('WebSocket unavailable - using API polling as fallback');
 			this.wsConnected = false;
+		}
+	}
+
+	private triggerReconnect(): void {
+		if (!this.isReconnecting) {
+			this.reconnectWebSocket().catch(e => {
+				this.logger.error('Reconnect loop error:', e);
+			});
 		}
 	}
 
@@ -177,6 +185,8 @@ export class LighterClient extends AbstractDexClient {
 		}
 		
 		this.isReconnecting = true;
+
+		await _sleep(5000);
 		
 		while (this.reconnectAttempts < this.maxReconnectAttempts) {
 			this.reconnectAttempts++;
@@ -184,6 +194,7 @@ export class LighterClient extends AbstractDexClient {
 			
 			try {
 				await this.initializeWebSocket();
+				await _sleep(2000);
 				
 				if (this.wsConnected) {
 					this.logger.log('WebSocket reconnected successfully');
@@ -194,8 +205,9 @@ export class LighterClient extends AbstractDexClient {
 			} catch (e) {
 				this.logger.warn('Reconnect attempt failed:', e);
 			}
-			
-			await _sleep(60000); // 60 seconds
+			const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
+			this.logger.log(`Waiting ${delay / 1000}s before next attempt...`);
+			await _sleep(delay);						
 		}
 		
 		this.logger.error('Max reconnect attempts reached');
