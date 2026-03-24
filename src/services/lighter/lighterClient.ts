@@ -22,7 +22,7 @@ export class LighterClient extends AbstractDexClient {
 	private cachedPositions: AccountPosition[] = [];
 	private wsConnected: boolean = false;
 	private reconnectAttempts = 0;
-	private maxReconnectAttempts = 10;
+	private maxReconnectAttempts = 100;
 	private isReconnecting = false;
 	private readonly reconnectMutex = new Mutex();
 	private heartbeatTimer: any = null; // Timer für aktiven Ping
