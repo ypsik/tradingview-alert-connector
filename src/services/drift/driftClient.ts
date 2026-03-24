@@ -421,7 +421,7 @@ export class DriftClient extends AbstractDexClient {
 				    const tx2 = await this.client.settlePNL(					
 					this.user.getUserAccountPublicKey(),
 					this.user.getUserAccount(),
-					0				     
+					perpMarketAccount.marketIndex				     
 				    );
 				    console.log("PnL settled:", tx2);
 				  } catch (e) {
