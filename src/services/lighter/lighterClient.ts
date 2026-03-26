@@ -22,10 +22,10 @@ export class LighterClient extends AbstractDexClient {
 	private cachedPositions: AccountPosition[] = [];
 	private wsConnected: boolean = false;
 	private reconnectAttempts = 0;
-	private maxReconnectAttempts = 100;
+	private maxReconnectAttempts = 10;
 	private isReconnecting = false;
 	private readonly reconnectMutex = new Mutex();
-	private heartbeatTimer: any = null; // Timer für aktiven Ping
+	private heartbeatTimer: any = null;
 	
 	constructor() {
 		super();
@@ -53,59 +53,82 @@ export class LighterClient extends AbstractDexClient {
 	private async initialize(): Promise<void> {
 		try {
 			await this.client.initialize();
-			if (typeof (this.client as any).ensureWasmClient === 'function') await (this.client as any).ensureWasmClient();
+			if (typeof (this.client as any).ensureWasmClient === 'function') {
+				await (this.client as any).ensureWasmClient();
+			}
 			const { ApiClient } = await import('lighter-ts-sdk');
 			this.apiClient = new ApiClient({ host: process.env.LIGHTER_API_URL || 'https://mainnet.zklighter.elliot.ai' });
 			(this as any).apiClient = this.apiClient;
 			await this.initializeWebSocket();
 		} catch (e) {
+			this.logger.error('Failed to initialize:', e);
 			throw e;
 		}
 	}
 
 	private async initializeWebSocket(): Promise<void> {
 		try {
-			// Cleanup vor dem Start
 			if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
 			if (this.wsClient) {
-				this.wsClient.onOpen = null; this.wsClient.onClose = null; 
-				this.wsClient.onError = null; this.wsClient.onMessage = null;
+				this.wsClient.onOpen = null;
+				this.wsClient.onClose = null;
+				this.wsClient.onError = null;
+				this.wsClient.onMessage = null;
 				try { this.wsClient.close(); } catch (e) {}
 			}
 
 			const { WsClient } = await import('lighter-ts-sdk');
 			const wsUrl = (process.env.LIGHTER_API_URL || 'https://mainnet.zklighter.elliot.ai').replace('https://', 'wss://').replace('http://', 'ws://');
 			
-			this.wsClient = new WsClient({ 
+			const newInstance = new WsClient({ 
 				url: `${wsUrl}/stream`,
 				onOpen: () => {
 					this.wsConnected = true;
 					this.reconnectAttempts = 0; 
 					this.logger.log('WebSocket connected');
-
-					// AKTIVER PING: Alle 30s senden, um Disconnects zu verhindern
+					
 					this.heartbeatTimer = setInterval(() => {
 						if (this.wsConnected && this.wsClient) {
-							try { this.wsClient.send({ type: 'ping' }); } catch (e) {}
+							try { 
+								this.logger.log('--- HEARTBEAT: Sending Ping ---');
+								this.wsClient.send({ type: 'ping' }); 
+							} catch (e) {
+								this.logger.warn('Heartbeat failed');
+							}
 						}
-					}, 30000);
+					}, 20000);
 				},
 				onClose: () => {
-					if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-					this.logger.warn('WebSocket closed');
-					this.wsConnected = false;
-					this.triggerReconnect();
+					if (this.wsClient === newInstance) {
+						if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+						this.logger.warn('WebSocket closed - triggering reconnect');
+						this.wsConnected = false;
+						this.triggerReconnect();
+					}
 				},
 				onError: (error: Error) => {
-					if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-					this.wsConnected = false;
-					this.triggerReconnect();
+					if (this.wsClient === newInstance) {
+						if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+						this.logger.warn('WebSocket error: ' + error.message);
+						this.wsConnected = false;
+						this.triggerReconnect();
+					}
 				},
 				onMessage: (message: any) => {
 					if (message.type === 'ping' || message === 'ping') {
-						try { this.wsClient.send({ type: 'pong' }); } catch (e) {}
+						this.logger.log('--- HEARTBEAT: Received Ping -> Sending Pong ---');
+						try { newInstance.send({ type: 'pong' }); } catch (e) {}
 						return;
-					}									
+					}
+					if (message.type === 'pong' || message === 'pong') {
+						this.logger.log('--- HEARTBEAT: Received Pong ---');
+						return;
+					}
+					
+					if (message.type !== 'connected') {
+						this.logger.log('WebSocket message:', JSON.stringify(message).substring(0, 200));
+					}
+
 					const rawData = message.positions || message.assets;
 					if (rawData && typeof rawData === 'object') {
 						const positions: AccountPosition[] = [];
@@ -120,7 +143,7 @@ export class LighterClient extends AbstractDexClient {
 					}
 				}
 			});
-			
+			this.wsClient = newInstance;
 			await this.wsClient.connect();
 			const accountIndex = parseInt(process.env.LIGHTER_ACCOUNT_INDEX!);
 			this.wsClient.send({ type: 'subscribe', channel: `account_all/${accountIndex}` });
@@ -137,19 +160,15 @@ export class LighterClient extends AbstractDexClient {
 
 	private async reconnectWebSocket(): Promise<void> {
 		await this.reconnectMutex.runExclusive(async () => {
-			if (this.wsConnected) return;
-			await _sleep(10000); // 10s warten gegen 429er Sperre
-			
+			if (this.wsConnected) { this.isReconnecting = false; return; }
+			await _sleep(10000);
 			while (this.reconnectAttempts < this.maxReconnectAttempts) {
 				this.reconnectAttempts++;
-				this.logger.log(`Retry ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+				this.logger.log(`Reconnect attempt ${this.reconnectAttempts}/10`);
 				try {
 					await this.initializeWebSocket();
 					await _sleep(5000);
-					if (this.wsConnected) {
-						this.isReconnecting = false;
-						return;
-					}
+					if (this.wsConnected) { this.isReconnecting = false; return; }
 				} catch (e) {}
 				await _sleep(Math.min(10000 * Math.pow(2, this.reconnectAttempts - 1), 60000));
 			}
@@ -160,10 +179,13 @@ export class LighterClient extends AbstractDexClient {
 	public async getIsAccountReady(): Promise<boolean> {
 		await this.initPromise;
 		try {
-			const { AccountApi } = await import('lighter-ts-sdk');
-			const accountApi = new AccountApi(this.apiClient);
-			const account = await accountApi.getAccount({ by: 'index', value: process.env.LIGHTER_ACCOUNT_INDEX! });
-			return !!account;
+			if (this.client && this.apiClient) {
+				const { AccountApi } = await import('lighter-ts-sdk');
+				const accountApi = new AccountApi(this.apiClient);
+				const account = await accountApi.getAccount({ by: 'index', value: process.env.LIGHTER_ACCOUNT_INDEX! });
+				return !!account;
+			}
+			return false;
 		} catch (e) { return false; }
 	}
 
@@ -177,12 +199,15 @@ export class LighterClient extends AbstractDexClient {
 
 		let size = doubleSizeIfReverseOrder(alertMessage, alertMessage.size);
 		const positions = (this.wsConnected && this.cachedPositions.length > 0) ? this.cachedPositions : openedPositions;
-
 		const pos = positions.find((el) => el.market_id === marketIndex);
-		if (pos && alertMessage.direction) {
-			const current = Math.abs(parseFloat((pos as any).position || (pos as any).balance || pos.size || '0'));
-			if (alertMessage.orderMode === 'full' || alertMessage.newPositionSize == 0) size = current;
-		}
+
+		if (pos) {
+			const currentSize = Math.abs(parseFloat((pos as any).position || (pos as any).balance || pos.size || '0'));
+			if (String(alertMessage.newPositionSize) === "0" || alertMessage.orderMode === 'full') {
+				this.logger.log(`Overshoot protection: Setting size to ${currentSize}`);
+				size = currentSize;
+			}
+		} else if (String(alertMessage.newPositionSize) === "0") return;
 
 		try {
 			const [tx, txHash, err] = await this.client.createOrder({
@@ -197,9 +222,7 @@ export class LighterClient extends AbstractDexClient {
 			});
 			if (err) throw new Error(err);
 			return { side, size, orderId: (txHash as any)?.tx_hash || String(Date.now()) };
-		} catch (e: any) {
-			throw e;
-		}
+		} catch (e: any) { throw e; }
 	}
 
 	private async getMarketIndex(symbol: string): Promise<number> {
@@ -217,9 +240,7 @@ export class LighterClient extends AbstractDexClient {
 		throw new Error('Market not found');
 	}
 
-	private getMarketDecimals(symbol: string) {
-		return (this as any)[`${symbol}_decimals`] || { size_decimals: 1, price_decimals: 5 };
-	}
+	private getMarketDecimals(symbol: string) { return (this as any)[`${symbol}_decimals`] || { size_decimals: 1, price_decimals: 5 }; }
 
 	public getOpenedPositions = async (): Promise<AccountPosition[]> => {
 		await this.initPromise;
@@ -230,5 +251,5 @@ export class LighterClient extends AbstractDexClient {
 			const acc = (res as any)?.accounts?.find((a: any) => a.account_index === parseInt(process.env.LIGHTER_ACCOUNT_INDEX!));
 			return acc?.positions?.filter((p: any) => Math.abs(parseFloat(p.position || p.balance || '0')) > 0) || [];
 		} catch (e) { return []; }
-	};
+	}
 }
