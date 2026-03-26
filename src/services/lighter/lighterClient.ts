@@ -22,7 +22,7 @@ export class LighterClient extends AbstractDexClient {
 	private cachedPositions: AccountPosition[] = [];
 	private wsConnected: boolean = false;
 	private reconnectAttempts = 0;
-	private maxReconnectAttempts = 10;
+	private maxReconnectAttempts = 100;
 	private isReconnecting = false;
 	private readonly reconnectMutex = new Mutex();
 	private heartbeatTimer: any = null;
@@ -90,7 +90,6 @@ export class LighterClient extends AbstractDexClient {
 					this.heartbeatTimer = setInterval(() => {
 						if (this.wsConnected && this.wsClient) {
 							try { 
-								this.logger.log('--- HEARTBEAT: Sending Ping ---');
 								this.wsClient.send({ type: 'ping' }); 
 							} catch (e) {
 								this.logger.warn('Heartbeat failed');
@@ -121,7 +120,6 @@ export class LighterClient extends AbstractDexClient {
 						return;
 					}
 					if (message.type === 'pong' || message === 'pong') {
-						this.logger.log('--- HEARTBEAT: Received Pong ---');
 						return;
 					}
 					
