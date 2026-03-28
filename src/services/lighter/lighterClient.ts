@@ -15,7 +15,7 @@ import { CustomLogger } from '../logger/logger.service';
 export class LighterClient extends AbstractDexClient {
 	private readonly client: SignerClient;
 	private apiClient: any; 
-	private wsClient: any;
+	private wsClient: any = null;
 	private readonly logger: CustomLogger;
 	private initPromise: Promise<void>;
 	private marketIndexCache: Map<string, number> = new Map();
@@ -23,9 +23,10 @@ export class LighterClient extends AbstractDexClient {
 	private wsConnected: boolean = false;
 	private reconnectAttempts = 0;
 	private maxReconnectAttempts = 100;
-	private isReconnecting = false;
-	private readonly reconnectMutex = new Mutex();
+	
+	private isReconnecting = false; 
 	private heartbeatTimer: any = null;
+	private readonly reconnectMutex = new Mutex();
 	
 	constructor() {
 		super();
@@ -66,16 +67,27 @@ export class LighterClient extends AbstractDexClient {
 		}
 	}
 
+	private destroyClient(): void {
+		if (this.heartbeatTimer) {
+			clearInterval(this.heartbeatTimer);
+			this.heartbeatTimer = null;
+		}
+		if (this.wsClient) {
+			try { this.wsClient.onOpen = () => {}; } catch(e) {}
+			try { this.wsClient.onClose = () => {}; } catch(e) {}
+			try { this.wsClient.onError = () => {}; } catch(e) {}
+			try { this.wsClient.onMessage = () => {}; } catch(e) {}
+			try { 
+				if (typeof this.wsClient.disconnect === 'function') this.wsClient.disconnect();
+				else if (typeof this.wsClient.close === 'function') this.wsClient.close();
+			} catch (e) {}
+			this.wsClient = null;
+		}
+	}
+
 	private async initializeWebSocket(): Promise<void> {
 		try {
-			if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-			if (this.wsClient) {
-				this.wsClient.onOpen = null;
-				this.wsClient.onClose = null;
-				this.wsClient.onError = null;
-				this.wsClient.onMessage = null;
-				try { this.wsClient.close(); } catch (e) {}
-			}
+			this.destroyClient();
 
 			const { WsClient } = await import('lighter-ts-sdk');
 			const wsUrl = (process.env.LIGHTER_API_URL || 'https://mainnet.zklighter.elliot.ai').replace('https://', 'wss://').replace('http://', 'ws://');
@@ -83,46 +95,52 @@ export class LighterClient extends AbstractDexClient {
 			const newInstance = new WsClient({ 
 				url: `${wsUrl}/stream`,
 				onOpen: () => {
+					if (this.wsClient !== newInstance) return;
+
+					if (!this.wsConnected) {
+						this.logger.log('WebSocket connected successfully');
+					}
+					
 					this.wsConnected = true;
 					this.reconnectAttempts = 0; 
-					this.logger.log('WebSocket connected');
 					
+					// Echter Ping alle 30s gegen den 60s Disconnect
+					if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
 					this.heartbeatTimer = setInterval(() => {
-						if (this.wsConnected && this.wsClient) {
-							try { 
-								this.wsClient.send({ type: 'ping' }); 
-							} catch (e) {
-								this.logger.warn('Heartbeat failed');
-							}
+						if (this.wsConnected && this.wsClient === newInstance) {
+							try { newInstance.send({ type: 'ping' }); } catch(e) {}
 						}
-					}, 20000);
+					}, 30000); 
 				},
 				onClose: () => {
 					if (this.wsClient === newInstance) {
-						if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-						this.logger.warn('WebSocket closed - triggering reconnect');
+						this.logger.warn('WebSocket closed -> Triggering recovery');
 						this.wsConnected = false;
 						this.triggerReconnect();
 					}
 				},
 				onError: (error: Error) => {
 					if (this.wsClient === newInstance) {
-						if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-						this.logger.warn('WebSocket error: ' + error.message);
+						this.logger.warn('WebSocket error -> Triggering recovery');
 						this.wsConnected = false;
 						this.triggerReconnect();
 					}
 				},
 				onMessage: (message: any) => {
-					if (message.type === 'ping' || message === 'ping') {
-						this.logger.log('--- HEARTBEAT: Received Ping -> Sending Pong ---');
+					if (message.type === 'ping') {
 						try { newInstance.send({ type: 'pong' }); } catch (e) {}
 						return;
 					}
-					if (message.type === 'pong' || message === 'pong') {
+					if (message.type === 'pong') return; // Server antwortet auf unseren Ping
+					
+					if (message.error) {
+						if (message.error.code !== 30009) {
+							this.logger.warn('WS API Error: ' + JSON.stringify(message.error));
+						}
 						return;
 					}
-					
+
+					// WICHTIG: Das Log für einkommende Nachrichten ist wieder da!
 					if (message.type !== 'connected') {
 						this.logger.log('WebSocket message:', JSON.stringify(message).substring(0, 200));
 					}
@@ -137,12 +155,16 @@ export class LighterClient extends AbstractDexClient {
 							}
 						}
 						this.cachedPositions = positions;
+						
+						// WICHTIG: Hier ist dein Positions-Update Log!
 						this.logger.log(`WS: Updated ${this.cachedPositions.length} positions`);
 					}
 				}
 			});
+			
 			this.wsClient = newInstance;
 			await this.wsClient.connect();
+
 			const accountIndex = parseInt(process.env.LIGHTER_ACCOUNT_INDEX!);
 			this.wsClient.send({ type: 'subscribe', channel: `account_all/${accountIndex}` });
 		} catch (e) {
@@ -153,23 +175,38 @@ export class LighterClient extends AbstractDexClient {
 	private triggerReconnect(): void {
 		if (this.reconnectMutex.isLocked()) return;
 		this.isReconnecting = true; 
-		this.reconnectWebSocket().catch(() => { this.isReconnecting = false; });
+		
+		this.reconnectWebSocket().finally(() => { 
+			this.isReconnecting = false; 
+		});
 	}
 
 	private async reconnectWebSocket(): Promise<void> {
 		await this.reconnectMutex.runExclusive(async () => {
 			if (this.wsConnected) { this.isReconnecting = false; return; }
-			await _sleep(10000);
+
+			this.logger.log('Starting 5s cooldown before reconnect...');
+			this.destroyClient(); 
+			await _sleep(5000); 
+			
 			while (this.reconnectAttempts < this.maxReconnectAttempts) {
 				this.reconnectAttempts++;
-				this.logger.log(`Reconnect attempt ${this.reconnectAttempts}/10`);
+				this.logger.log(`Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
 				try {
 					await this.initializeWebSocket();
-					await _sleep(5000);
-					if (this.wsConnected) { this.isReconnecting = false; return; }
+					await _sleep(5000); 
+					if (this.wsConnected) { 
+						this.logger.log('Connection recovered!');
+						this.isReconnecting = false;
+						return;
+					}
 				} catch (e) {}
-				await _sleep(Math.min(10000 * Math.pow(2, this.reconnectAttempts - 1), 60000));
+				
+				const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
+				this.logger.log(`Waiting ${delay / 1000}s for next attempt...`);
+				await _sleep(delay);
 			}
+			this.logger.error('Max reconnect attempts reached.');
 			this.isReconnecting = false;
 		});
 	}
@@ -202,17 +239,22 @@ export class LighterClient extends AbstractDexClient {
 		if (pos) {
 			const currentSize = Math.abs(parseFloat((pos as any).position || (pos as any).balance || pos.size || '0'));
 			if (String(alertMessage.newPositionSize) === "0" || alertMessage.orderMode === 'full') {
-				this.logger.log(`Overshoot protection: Setting size to ${currentSize}`);
+				this.logger.log(`Overshoot protection: Setting close size to exact position size: ${currentSize}`);
 				size = currentSize;
 			}
 		} else if (String(alertMessage.newPositionSize) === "0") return;
 
 		try {
+			const baseAmount = Math.floor(size * Math.pow(10, decimals.size_decimals));
+			const formattedPrice = Math.floor(price * Math.pow(10, decimals.price_decimals));
+			
+			if (baseAmount <= 0) return;
+
 			const [tx, txHash, err] = await this.client.createOrder({
 				marketIndex,
 				clientOrderIndex: Date.now(),
-				baseAmount: Math.floor(size * Math.pow(10, decimals.size_decimals)),
-				price: Math.floor(price * Math.pow(10, decimals.price_decimals)),
+				baseAmount,
+				price: formattedPrice,
 				isAsk: side === OrderSide.SELL,
 				orderType: (this.client.constructor as any).ORDER_TYPE_LIMIT,
 				timeInForce: (this.client.constructor as any).ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,

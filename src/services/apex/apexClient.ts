@@ -224,7 +224,7 @@ export class ApexClient extends AbstractDexClient {
 
                 this.logger.log('Order ID: ', order.id);
 
-                return order.status == 'closed';
+                return order.status === 'closed' || order.status === 'filled' || order.remaining === 0;
         };
 
 	private generateRandomHexString(size: number): string {
