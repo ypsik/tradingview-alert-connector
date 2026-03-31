@@ -126,8 +126,8 @@ export class BitfinexClient extends AbstractDexClient {
 				);
 				return;
 			}
-
-			const sum = Math.abs(position.contracts);
+                                
+			const sum = Math.abs(position.notional ?? Number(position.info?.[2]));
 
 			size =
 				orderMode === 'full' || newPositionSize == 0
@@ -147,7 +147,7 @@ export class BitfinexClient extends AbstractDexClient {
 					(side === OrderSide.SELL && position.contracts > 0) ||
 					(side === OrderSide.BUY && position.contracts < 0)
 				)
-					size = Math.abs(position.contracts);
+					size = Math.abs(position.notional ?? Number(position.info?.[2]));
 			}
 		}
 
