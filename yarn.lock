@@ -3677,6 +3677,11 @@ caniuse-lite@^1.0.30001726:
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001731.tgz#277c07416ea4613ec564e5b0ffb47e7b60f32e2f"
   integrity sha512-lDdp2/wrOmTRWuoB5DpfNkC0rJDU8DqRa6nYL6HK6sytw70QMopt/NIc/9SM7ylItlBWfACXk0tEn37UWM/+mg==
 
+cctx@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/cctx/-/cctx-1.0.1.tgz#05676cdcf8a05c815ac01b34062abdd44c376159"
+  integrity sha512-AcWAyflX8kGUaYMyvCLzRpcOe4MyMYioPzqoQ8AIrNFSQS2ddKLW46fIKc4wiTPai6b/Pebx2acBc1vPjGWGpA==
+
 ccxt@^4.5.7:
   version "4.5.7"
   resolved "https://registry.yarnpkg.com/ccxt/-/ccxt-4.5.7.tgz#3ab12b21f8cf0c1870fa9672211fd5b0df928703"
