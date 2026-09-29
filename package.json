@@ -20,11 +20,12 @@
 		"@solana/web3.js": "^1.98.4"
 	},
 	"dependencies": {
+		"@anchor-lang/core": "1.0.1",
 		"@coral-xyz/anchor": "^0.28.0",
 		"@cosmjs/cosmwasm-stargate": "^0.36.0",
 		"@cosmjs/proto-signing": "^0.36.0",
 		"@cosmjs/stargate": "^0.36.0",
-		"@drift-labs/sdk": "^2.131.1",
+		"@velocity-exchange/sdk": "^0.26.0",
 		"@dydxprotocol/v4-client-js": "1.1.31",
 		"@project-serum/anchor": "^0.26.0",
 		"@sentry/integrations": "^6.19.1",

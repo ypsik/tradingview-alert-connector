@@ -11,7 +11,7 @@ import * as lighter from 'lighter-ts-sdk/dist/api/account-api';
 
 import {
   PerpPosition
-} from '@drift-labs/sdk';
+} from '@velocity-exchange/sdk';
 
 export abstract class AbstractDexClient {
 	abstract getIsAccountReady(): Promise<boolean>;

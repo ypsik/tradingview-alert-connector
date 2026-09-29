@@ -1,7 +1,7 @@
 import { Connection, Keypair, PublicKey  } from '@solana/web3.js';
-import * as anchor from '@coral-xyz/anchor';
-import { AnchorProvider, Wallet, Program, Idl } from '@coral-xyz/anchor';
-import * as drift from '@drift-labs/sdk';
+import * as anchor from '@anchor-lang/core';
+import { AnchorProvider, Wallet, Program, Idl } from '@anchor-lang/core';
+import * as velocity from '@velocity-exchange/sdk';
 import { CustomUserAccountSubscriber } from './customUserAccountSubscriber';
 
 import { dydxV4OrderParams, AlertObject, OrderResult } from '../../types';
@@ -27,12 +27,12 @@ export function keypairFromMnemonic(mnemonic: string): Keypair {
 
 export class DriftClient extends AbstractDexClient {
 	private readonly env = 'mainnet-beta';
-	private client: drift.DriftClient;
-	private user: drift.User;
+	private client: velocity.VelocityClient;
+	private user: velocity.User;
 	private subAccountId: number = 0; 
 	private readonly wallet: Wallet;
 	private readonly logger: CustomLogger;	
-	private marketIndexMap: Map<string, drift.PerpMarketAccount> = new Map<string, drift.PerpMarketAccount>();
+	private marketIndexMap: Map<string, velocity.PerpMarketAccount> = new Map<string, velocity.PerpMarketAccount>();
 	private readyPromise: Promise<void>;
 	constructor() {
 		super();
@@ -55,7 +55,7 @@ export class DriftClient extends AbstractDexClient {
 	{
 		try {
 			// Initialize Drift SDK          
-			const sdkConfig = drift.initialize({ env: this.env });
+			const sdkConfig = velocity.initialize({ env: this.env });
 			const connection = !process.env.DRIFT_RPC_WS ?                          
 			                new Connection(process.env.DRIFT_RPC_SERVER) :
 					new Connection(process.env.DRIFT_RPC_SERVER, 
@@ -72,7 +72,7 @@ export class DriftClient extends AbstractDexClient {
 			            commitment: 'confirmed',
 			        }
 			    );
-			const driftPublicKey = new PublicKey(sdkConfig.DRIFT_PROGRAM_ID);
+			const driftPublicKey = new PublicKey(sdkConfig.VELOCITY_PROGRAM_ID);
 			const rawIndexes = process.env.DRIFT_MARKET_IDS || '';
 			const perpMarketIndexes: number[] = rawIndexes
 				  .split(',')
@@ -86,7 +86,7 @@ export class DriftClient extends AbstractDexClient {
                             ? new PublicKey(process.env.DRIFT_DELIGATE_ACCOUNT)
                             : undefined;
 
-			this.client = new drift.DriftClient({
+			this.client = new velocity.VelocityClient({
 			  connection: provider.connection,
 			  wallet: provider.wallet,
 			  programID: driftPublicKey,
@@ -114,7 +114,7 @@ export class DriftClient extends AbstractDexClient {
 			    30_000
 			);
 			this.user = this.client.getUser(this.subAccountId, delegateAuthority);
-//			this.user = new drift.User({
+//			this.user = new velocity.User({
 //                                driftClient: this.client,
 //                                userAccountPublicKey: await this.client.getUserAccountPublicKey(),
 //				accountSubscription: {
@@ -145,7 +145,7 @@ export class DriftClient extends AbstractDexClient {
 
 			const spotMarketIndexes: number[] = [];
 			
-                        const bulkAccountLoader = new drift.BulkAccountLoader(
+                        const bulkAccountLoader = new velocity.BulkAccountLoader(
                                 provider.connection,
                                 'confirmed',
                                 1000
@@ -155,7 +155,7 @@ export class DriftClient extends AbstractDexClient {
 			const delegateAuthority =  process.env.DRIFT_DELIGATE_ACCOUNT
 			    ? new PublicKey(process.env.DRIFT_DELIGATE_ACCOUNT)
 			    : undefined;
-			const client = new drift.DriftClient(
+			const client = new velocity.VelocityClient(
                                 {
                                         connection: provider.connection,
                                         wallet: provider.wallet,
@@ -184,7 +184,7 @@ export class DriftClient extends AbstractDexClient {
 
                  
 			const user = client.getUser(this.subAccountId, delegateAuthority);
-//			const user = new drift.User({
+//			const user = new velocity.User({
 //			        driftClient: client,
 //			        userAccountPublicKey: await client.getUserAccountPublicKey(),
 //				accountSubscription: {
@@ -200,7 +200,7 @@ export class DriftClient extends AbstractDexClient {
 			for (const pos of userAccount.spotPositions) {
 				const idx = pos.marketIndex;			   
 				// Prüfen ob Position aktiv ist (z.B. scaledBalance > 0)
-				if (pos.scaledBalance.gt(new drift.BN(0))) {
+				if (pos.scaledBalance.gt(new velocity.BN(0))) {
 					spotMarketIndexes.push(idx);
 				}
 			}		
@@ -266,7 +266,7 @@ export class DriftClient extends AbstractDexClient {
 
 	public async placeOrder(
 		alertMessage: AlertObject,
-		openedPositions: drift.PerpPosition[],
+		openedPositions: velocity.PerpPosition[],
 		mutex: Mutex
 	) {
 		await this.readyPromise;           
@@ -314,8 +314,8 @@ export class DriftClient extends AbstractDexClient {
 				this.logger.log('order is ignored because position not exists');
 				return;
 			}
-			const baseAmount = drift.convertToNumber(position.baseAssetAmount, drift.BASE_PRECISION);			
-			const quoteAssetAmount = Math.abs(drift.convertToNumber(position.quoteAssetAmount, drift.QUOTE_PRECISION));
+			const baseAmount = velocity.convertToNumber(position.baseAssetAmount, velocity.BASE_PRECISION);			
+			const quoteAssetAmount = Math.abs(velocity.convertToNumber(position.quoteAssetAmount, velocity.QUOTE_PRECISION));
 			this.logger.log(`position baseAmount ${baseAmount},  quoteAssetAmount ${quoteAssetAmount}`);
 			
 			const profit = calculateProfit(orderParams.price, quoteAssetAmount/baseAmount);
@@ -342,7 +342,7 @@ export class DriftClient extends AbstractDexClient {
 					: Math.min(size, sum);
 		} else if (orderMode === 'full' || newPositionSize == 0) {
 			const position = openedPositions.find((el) => el.marketIndex === perpMarketAccount.marketIndex);
-			const baseAmount = drift.convertToNumber(position.baseAssetAmount, drift.BASE_PRECISION);
+			const baseAmount = velocity.convertToNumber(position.baseAssetAmount, velocity.BASE_PRECISION);
 
 			if (!position) {
 				if (newPositionSize == 0) {
@@ -377,17 +377,17 @@ export class DriftClient extends AbstractDexClient {
 
 		
 		try {		
-			const orderStepSize = perpMarketAccount.amm.orderStepSize; // z.B. 100000
-			const rawBaseAssetAmount = new drift.BN(size * drift.BASE_PRECISION.toNumber());
+			const orderStepSize = perpMarketAccount.orderStepSize; // z.B. 100000
+			const rawBaseAssetAmount = new velocity.BN(size * velocity.BASE_PRECISION.toNumber());
 			const baseAssetAmount = rawBaseAssetAmount.div(orderStepSize).mul(orderStepSize);
 			
                         const params ={
                           marketIndex: perpMarketAccount.marketIndex,
-                          direction: side == OrderSide.SELL ? drift.PositionDirection.SHORT : drift.PositionDirection.LONG,
+                          direction: side == OrderSide.SELL ? velocity.PositionDirection.SHORT : velocity.PositionDirection.LONG,
                           baseAssetAmount: baseAssetAmount,
-                          orderType: drift.OrderType.LIMIT, 
-			  price: new drift.BN(price * drift.PRICE_PRECISION.toNumber()),
-			  postOnly: drift.PostOnlyParams.NONE, 
+                          orderType: velocity.OrderType.LIMIT, 
+			  price: new velocity.BN(price * velocity.PRICE_PRECISION.toNumber()),
+			  postOnly: velocity.PostOnlyParams.NONE, 
                         };
 		
 			let txSig;
@@ -463,7 +463,7 @@ export class DriftClient extends AbstractDexClient {
 		return true;
 	};
 
-	public getOpenedPositions = async (): Promise<drift.PerpPosition[]> =>
+	public getOpenedPositions = async (): Promise<velocity.PerpPosition[]> =>
 	{
 		await this.readyPromise;
 		const userAccount = this.client.getUserAccount(this.subAccountId);

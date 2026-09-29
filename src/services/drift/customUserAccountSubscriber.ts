@@ -3,7 +3,7 @@ import {
   UserAccountSubscriber,
   DataAndSlot,
   UserAccount,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 export class  CustomUserAccountSubscriber implements UserAccountSubscriber {
   isSubscribed = false;

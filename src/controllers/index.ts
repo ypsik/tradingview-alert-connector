@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import type { Position } from 'ccxt';
 import {
   PerpPosition
-} from '@drift-labs/sdk';
+} from '@velocity-exchange/sdk';
 import * as nexo  from '../nexo';
 import * as aster  from '../aster';
 import * as mars  from '../mars';
